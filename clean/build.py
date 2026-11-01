@@ -29,7 +29,11 @@ def _load_one(path, res, spec, cfg, state, sector, tag) -> pd.DataFrame | None:
             df[c] = d
         df["_rec_id"] = [f"row{i + 2}" for i in range(len(df))]
         return df
-    df = canon(read_table(path), cfg["columns"])
+    raw = read_table(path)
+    if role == "cms_quality" and "measure_code" in {hkey(c) for c in raw.columns}:
+        df = _pivot_quality(raw, state)
+    else:
+        df = canon(raw, cfg["columns"])
     if df.empty:
         return df
     df["_src"] = res.source
@@ -44,9 +48,16 @@ def _load_one(path, res, spec, cfg, state, sector, tag) -> pd.DataFrame | None:
         if "state" in df:
             df = df[df["state"].str.upper().isin(["", state])].copy()
         df["state"] = state
-        if "year" in df and role == "cms_util":
-            key = "ccn" if "ccn" in df else "npi"
-            df = df.sort_values("year").drop_duplicates(key, keep="last")
+        if role == "cms_util":
+            if "smry_ctgry" in df:                       # drop NATION / STATE total rows
+                df = df[df["smry_ctgry"].str.upper() == "PROVIDER"].copy()
+            if "year" in df:
+                key = "ccn" if "ccn" in df else "npi"
+                df = df.sort_values("year").drop_duplicates(key, keep="last")
+            if sector == "hospice" and "service_days" in df and "episodes" in df:
+                df["avg_los"] = df["service_days"] / df["episodes"].where(df["episodes"] > 0)
+            if "neoplasm_pct" in df and "noncancer_share" not in df:
+                df["noncancer_share"] = 100 - df["neoplasm_pct"]
     if role == "license":
         words = cfg["clean"]["closed_status_words"]
         st = df.get("status", pd.Series("", index=df.index)).str.upper()
@@ -67,3 +78,25 @@ def add_address_fields(df: pd.DataFrame, cfg) -> pd.DataFrame:
         vf = df["virtual_flag"].str.upper().isin(["Y", "YES", "TRUE", "1"])
         df["is_virtual"] = df["is_virtual"] | vf
     return df
+
+
+_QUALITY_MEASURES = {"H_011_01_OBSERVED": "final_days_visit_pct", "Pct_Pts_w_Cancer": "cancer_pct"}
+
+
+def _pivot_quality(raw: pd.DataFrame, state: str) -> pd.DataFrame:
+    """CMS Hospice - Provider Data is long (one row per measure); pivot the measures we use."""
+    raw = raw.copy()
+    raw.columns = [hkey(c) for c in raw.columns]
+    raw = raw[raw["state"].str.upper() == state]
+    lut = {k.lower(): v for k, v in _QUALITY_MEASURES.items()}
+    raw["_m"] = raw["measure_code"].str.lower().map(lut)
+    raw = raw[raw["_m"].notna()].copy()
+    raw["score"] = raw["score"].map(to_num)
+    wide = raw.pivot_table(index="cms_certification_number_ccn", columns="_m", values="score", aggfunc="first")
+    wide = wide.reset_index().rename(columns={"cms_certification_number_ccn": "ccn"})
+    names = raw.drop_duplicates("cms_certification_number_ccn").set_index("cms_certification_number_ccn")["facility_name"]
+    wide["name"] = wide["ccn"].map(names)
+    wide["state"] = state
+    if "cancer_pct" in wide:
+        wide["noncancer_share"] = 100 - wide["cancer_pct"]
+    return wide

@@ -47,10 +47,9 @@ def run(cfg, states, sectors, offline=False, log=None):
         if st not in cfg["run"]["supported_states"]:
             log.warn(f"state {st} not in supported_states; skipping")
             continue
-        for role, store in (("corp", corp_by_state), ("nppes", nppes_by_state)):
-            for sid, sp in specs_for(cfg, role, st, sectors[0]):
-                res = resolve_source(sid, sp, st, "all", cfg, log, offline)
-                store[st] = (load_source(res, sp, cfg, st, "all"), res)
+        for sid, sp in specs_for(cfg, "nppes", st, sectors[0]):
+            res = resolve_source(sid, sp, st, "all", cfg, log, offline)
+            nppes_by_state[st] = (load_source(res, sp, cfg, st, "all"), res)
         for sector in sectors:
             frames, roles = {}, {}
             for role in ("license", "cms_provider", "cms_util", "cms_quality"):
@@ -66,8 +65,10 @@ def run(cfg, states, sectors, offline=False, log=None):
             prov = merge_sector(frames, roles, st, sector, cfg)
             if prov.empty:
                 continue
-            corp, cres = corp_by_state.get(st, (None, None))
-            prov = enrich_corp(prov, corp, cres, cfg, log)
+            for sid, sp in specs_for(cfg, "corp", st, sector):   # Sunbiz/GA SOS exports and/or PECOS owners
+                res = resolve_source(sid, sp, st, sector, cfg, log, offline)
+                corp = load_source(res, sp, cfg, st, sector)
+                prov = enrich_corp(prov, corp, res, cfg, log)
             npp, nres = nppes_by_state.get(st, (None, None))
             prov = enrich_nppes(prov, npp, nres, cfg, log)
             log.info(f"{st}/{sector}: {len(prov)} providers after entity matching")

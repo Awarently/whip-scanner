@@ -55,6 +55,26 @@ sources:
     url: null                  # Sunbiz / GA SOS: no automated scraping
     manual_name: corp.csv
     instructions: "FL: Sunbiz.org (search.sunbiz.org, or bulk quarterly data). GA: ecorp.sos.ga.gov. Export officers/registered agents to CSV: entity_name,formation_date,status,officer_name,officer_title,registered_agent. Save as data/manual/<STATE>/corp.csv"
+  owners_hh:
+    role: corp                 # PECOS enrollment owners (public CMS data) feed the same owner/official linking as Sunbiz
+    sectors: [home_health]
+    kind: pecos
+    enroll_id: 15f64ab4-3172-4a27-b589-ebd67a6d28aa   # "Home Health Agency Enrollments" (release 2026-10-19)
+    owners_id: fc009b2d-7846-44b1-b4a1-692f0c143879   # "Home Health Agency All Owners"
+    state_param: "ENROLLMENT STATE"
+    url: null
+    manual_name: owners_hh.csv
+    instructions: "data.cms.gov -> 'Home Health Agency Enrollments' + 'All Owners' joined on ENROLLMENT ID; save as data/manual/<STATE>/home_health/owners_hh.csv (name,ccn,npi,officer_name,officer_title,...)"
+  owners_hospice:
+    role: corp
+    sectors: [hospice]
+    kind: pecos
+    enroll_id: 25704213-e833-4b8b-9dbc-58dd17149209   # "Hospice Enrollments" (release 2026-10-19)
+    owners_id: e983965e-1603-4cb8-82b5-c40090e380d1   # "Hospice All Owners"
+    state_param: "ENROLLMENT STATE"
+    url: null
+    manual_name: owners_hospice.csv
+    instructions: "data.cms.gov -> 'Hospice Enrollments' + 'All Owners'; save as data/manual/<STATE>/hospice/owners_hospice.csv"
   license_hh_FL:
     role: license
     sectors: [home_health]
@@ -66,7 +86,9 @@ sources:
     role: license
     sectors: [home_health]
     states: [GA]
-    url: null                  # HFR Facility Finder is an interactive form; no bulk URL, no scraping
+    kind: ga_dch               # the Facility Finder's own statewide feed (one request); manual files are the fallback
+    feed_files: {license_hha: "HOME HEALTH AGENCY", license_phcp: "PRIVATE HOME CARE PROVIDER"}
+    url: null
     manual_name: license.csv
     manual_glob: "license*.csv"   # loads every match and concatenates them
     instructions: "GA DCH HFR Facility Finder (forms.dch.georgia.gov/HFRD): export BOTH 'Home Health Agencies' -> data/manual/GA/home_health/license_hha.csv AND 'Private Home Care Providers' -> data/manual/GA/home_health/license_phcp.csv. The file name sets facility_type (Private Home Care Providers are state-licensed, usually have no CCN/Medicare data)."
@@ -81,6 +103,8 @@ sources:
     role: license
     sectors: [hospice]
     states: [GA]
+    kind: ga_dch
+    feed_files: {license: "HOSPICE"}
     url: null
     manual_name: license.csv
     manual_glob: "license*.csv"
@@ -88,30 +112,42 @@ sources:
   cms_provider_hh:
     role: cms_provider
     sectors: [home_health]
-    url: "https://data.cms.gov/provider-data/api/1/datastore/query/6jpm-sxkc/0/download?format=csv"   # UNVERIFIED dataset id
+    kind: pdc
+    dataset_id: 6jpm-sxkc      # verified 2026-11-01: "Home Health Care Agencies"
+    url: null
     manual_name: cms_provider.csv
     instructions: "CMS Provider Data Catalog -> Home Health Care - Agencies (data.cms.gov/provider-data). Download CSV, save as data/manual/<STATE>/home_health/cms_provider.csv"
   cms_util_hh:
     role: cms_util
     sectors: [home_health]
-    url: null                  # Medicare utilization-by-provider lives on data.cms.gov data-api; set when verified
+    kind: cms_api
+    dataset_id: 43ef03ce-2b60-40a8-958e-146195b5fec7   # "Medicare Post-Acute Care Utilization - Home Health Agency by Geography and Provider" (release 2026-08-11; update id when CMS republishes)
+    state_param: STATE
+    url: null
     manual_name: cms_util.csv
     instructions: "data.cms.gov -> Medicare Home Health Agency utilization/payment by provider. Needs ccn/npi, beneficiaries, episodes, total payment. Save as data/manual/<STATE>/home_health/cms_util.csv"
   cms_provider_hospice:
     role: cms_provider
     sectors: [hospice]
-    url: "https://data.cms.gov/provider-data/api/1/datastore/query/yc9t-dgbk/0/download?format=csv"  # UNVERIFIED dataset id
+    kind: pdc
+    dataset_id: yc9t-dgbk      # verified 2026-11-01: "Hospice - General Information"
+    url: null
     manual_name: cms_provider.csv
     instructions: "CMS Provider Data Catalog -> Hospice - General Information. Save as data/manual/<STATE>/hospice/cms_provider.csv"
   cms_quality_hospice:
     role: cms_quality
     sectors: [hospice]
+    kind: pdc
+    dataset_id: 252m-zfp9      # verified: "Hospice - Provider Data" (long format; pivoted on load)
     url: null
     manual_name: cms_quality.csv
     instructions: "CMS PDC -> Hospice - Provider Data (Hospice Compare measures, e.g. visits in last days of life). Save as data/manual/<STATE>/hospice/cms_quality.csv"
   cms_util_hospice:
     role: cms_util
     sectors: [hospice]
+    kind: cms_api
+    dataset_id: 4e73f1b5-82cb-4682-8ad2-28493f0b6840   # "... Hospice by Geography and Provider" (release 2026-08-11)
+    state_param: STATE
     url: null
     manual_name: cms_util.csv
     instructions: "data.cms.gov -> Medicare Hospice utilization/payment by provider (ALOS, live discharges, beneficiaries, payment, cap). Save as data/manual/<STATE>/hospice/cms_util.csv"
@@ -121,15 +157,15 @@ sources:
 # Extend when a real file uses a different header.
 # ---------------------------------------------------------------------------
 columns:
-  name: [name, provider_name, facility_name, agency_name, legal_name, bus_name, entity_name]
+  name: [name, prvdr_name, provider_name, facility_name, agency_name, legal_name, bus_name, entity_name]
   dba: [dba, doing_business_as, trade_name]
   license_no: [license_no, license_number, license, license_nbr, lic_no, facility_id]
   npi: [npi, npi_number, provider_npi]
-  ccn: [ccn, cms_certification_number_ccn, cms_certification_number, provider_ccn, provider_number, certification_number]
+  ccn: [ccn, prvdr_id, cms_certification_number_ccn, cms_certification_number, provider_ccn, provider_number, certification_number]
   address: [address, address_line_1, address_1, street_address, street, location_address, practice_address]
-  city: [city, city_town, town]
+  city: [city, prvdr_city, city_town, town]
   state: [state, st]
-  zip: [zip, zip_code, postal_code, zipcode]
+  zip: [zip, prvdr_zip, zip_code, postal_code, zipcode]
   county: [county, county_name, county_parish]
   license_date: [license_date, original_license_date, license_effective_date, issue_date, certification_date, date_first_licensed, effective_date]
   close_date: [close_date, closure_date, termination_date, license_end_date, expiration_date_closed, end_date]
@@ -143,8 +179,8 @@ columns:
   sanction_same_conduct: [sanction_same_conduct]
   inspection_failed: [inspection_failed, failed_inspections, deficiencies, condition_level_deficiencies, immediate_jeopardy]
   virtual_flag: [virtual_flag, cmra_flag, mailbox_flag]
-  beneficiaries: [beneficiaries, total_beneficiaries, tot_benes, total_unduplicated_beneficiaries, total_hha_beneficiaries, total_hospice_beneficiaries]
-  episodes: [episodes, total_episodes, tot_episodes, total_hha_episodes]
+  beneficiaries: [beneficiaries, bene_dstnct_cnt, total_beneficiaries, tot_benes, total_unduplicated_beneficiaries, total_hha_beneficiaries, total_hospice_beneficiaries]
+  episodes: [episodes, tot_epsd_stay_cnt, total_episodes, tot_episodes, total_hha_episodes]
   total_payment: [total_payment, tot_mdcr_pymt_amt, total_medicare_payment, total_medicare_payment_amount, total_hha_medicare_payment_amount, total_hospice_medicare_payment_amount, tot_pymt]
   avg_los: [avg_los, average_length_of_stay, alos, avg_length_of_stay, average_los_days]
   live_discharge_pct: [live_discharge_pct, live_discharge_rate, pct_live_discharges, percent_live_discharges]
@@ -157,12 +193,16 @@ columns:
   officer_name: [officer_name, officer, member_name, manager_name, principal_name]
   officer_title: [officer_title, title, position]
   year: [year, data_year, reporting_year]
+  smry_ctgry: [smry_ctgry]
+  service_days: [tot_srvc_days]
+  neoplasm_pct: [prmry_dx_neobld_pct]
+  ownership_pct: [ownership_pct, percentage_ownership]
 
 # ---------------------------------------------------------------------------
 clean:
   virtual_markers: ["REGUS", "WEWORK", "SPACES", "DAVINCI VIRTUAL", "VIRTUAL OFFICE", "UPS STORE", "POSTNET", "PACK AND SHIP", "MAILBOXES ETC"]
   closed_status_words: ["CLOSED", "INACTIVE", "REVOKED", "EXPIRED", "WITHDRAWN", "SURRENDER", "TERMINATED", "VOLUNTARILY"]
-  admin_title_words: ["ADMIN", "DIRECTOR OF NURS", "CLINICAL MANAGER"]
+  admin_title_words: ["ADMIN", "DIRECTOR OF NURS", "CLINICAL MANAGER", "MANAGING EMPLOYEE"]
   agent_title_words: ["REGISTERED AGENT", "AGENT"]
 
 match:

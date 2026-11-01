@@ -19,13 +19,17 @@ def _join(*parts) -> str:
 def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) -> pd.DataFrame:
     prov = prov.copy()
     for c in ("registered_agent", "corp_formation_date", "corp_status"):
-        prov[c] = pd.NA
-    if corp is None or corp.empty:
+        if c not in prov:
+            prov[c] = pd.NA
+    if corp is None or corp.empty or "name" not in corp:
         return prov
     corp = corp.copy()
+    for c in ("ccn", "npi", "officer_name", "officer_title"):
+        if c not in corp:
+            corp[c] = ""
     corp["_n"] = corp["name"].map(norm_name)
     admin_w, agent_w = cfg["clean"]["admin_title_words"], cfg["clean"]["agent_title_words"]
-    ents = {}
+    ents, by_ccn, by_npi = {}, {}, {}
     for n, g in corp.groupby("_n"):
         owners, admins = [], []
         for _, r in g.iterrows():
@@ -39,12 +43,18 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
                    "formed": g["formation_date"].dropna().min() if "formation_date" in g else pd.NaT,
                    "status": clean_str(g["status"].iloc[0]) if "status" in g else "",
                    "rec": g["_rec_id"].iloc[0]}
+        for c in g["ccn"].dropna().unique():
+            if clean_str(c):
+                by_ccn[clean_str(c)] = n
+        for c in g["npi"].dropna().unique():
+            if clean_str(c):
+                by_npi[clean_str(c)] = n
     keys = list(ents)
     thr = cfg["match"]["corp_name_threshold"]
     hits = 0
     for i, r in prov.iterrows():
         n = norm_name(r["name"])
-        k = n if n in ents else None
+        k = by_ccn.get(clean_str(r["ccn"])) or by_npi.get(clean_str(r["npi"])) or (n if n in ents else None)
         if k is None and n:
             best = max(keys, key=lambda x: fuzz.token_sort_ratio(n, x), default=None)
             if best and fuzz.token_sort_ratio(n, best) >= thr:

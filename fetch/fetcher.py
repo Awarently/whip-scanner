@@ -13,6 +13,7 @@ from pathlib import Path
 import requests
 
 from core import RunLog
+from . import feeds
 
 _printed: set[str] = set()
 
@@ -71,9 +72,32 @@ def resolve_source(src_id: str, spec: dict, state: str, sector: str, cfg: dict,
     today = cfg["_as_of"].strftime("%Y%m%d")
     res: FetchResult | None = None
 
-    # 1. automated
+    # 1a. structured feeds (GA DCH, CMS PDC / data-api, PECOS owners)
+    kind = spec.get("kind")
+    if kind and not offline:
+        sub = rawdir / today
+        try:
+            if kind == "ga_dch":
+                paths = feeds.ga_dch(spec, cfg, log, sub)
+                res = FetchResult(src_id, paths[0], "auto", today, paths=paths)
+            else:
+                dest = rawdir / f"{stem}_{today}.csv"
+                if dest.exists():
+                    res = FetchResult(src_id, dest, "cache", today)
+                    log.info(f"{src_id}: reusing today's download {dest.name}")
+                else:
+                    fn = {"pdc": lambda: feeds.pdc(spec, cfg, log, dest),
+                          "cms_api": lambda: feeds.cms_api(spec, cfg, log, state, dest),
+                          "pecos": lambda: feeds.pecos(spec, cfg, log, state, dest)}[kind]
+                    res = FetchResult(src_id, fn(), "auto", today)
+            log.info(f"{src_id}: {kind} feed OK")
+        except Exception as e:                       # noqa: BLE001 - any failure -> manual fallback
+            log.warn(f"{src_id}: {kind} feed failed ({type(e).__name__}: {str(e)[:150]}); trying manual file")
+            res = None
+
+    # 1b. automated plain URL
     url = spec.get("url")
-    if url and not offline:
+    if res is None and url and not offline:
         dest = rawdir / f"{stem}_{today}.csv"
         if dest.exists():                       # never overwrite silently
             res = FetchResult(src_id, dest, "cache", today)
@@ -81,7 +105,7 @@ def resolve_source(src_id: str, spec: dict, state: str, sector: str, cfg: dict,
         elif _download(url, dest, cfg, log):
             res = FetchResult(src_id, dest, "auto", today)
             log.info(f"{src_id}: downloaded -> {dest}")
-    elif not url:
+    elif not url and not kind:
         log.info(f"{src_id}: no automated bulk URL configured; trying manual file")
 
     # 2. manual

@@ -97,7 +97,7 @@ def generate(root: Path, seed: int = 7) -> dict:
                   {"LASTNAME": "", "FIRSTNAME": "", "MIDNAME": "", "BUSNAME": "UNRELATED EXCLUDED CO", "NPI": "1999999991", "STATE": "FL", "EXCLTYPE": "1128b7"},
                   ]).to_csv(m / "shared/leie.csv", index=False)
     pd.DataFrame([{"date": "2026-05-01", "title": "Fictional press release", "url": "https://example.invalid/pr1",
-                   "names": "Pressnamed Defendant; Some Other Defendant"}]).to_csv(m / "shared/press_releases.csv", index=False)
+                   "names": "Pressnamed Defendant; Some Other Defendant", "state": "FL"}]).to_csv(m / "shared/press_releases.csv", index=False)
     pd.DataFrame([{"entity_name": "Owner Share Alpha LLC", "formation_date": "2014-04-20", "status": "ACTIVE",
                    "officer_name": "Zed Quill", "officer_title": "MGR", "registered_agent": "Generic Agent Services"},
                   {"entity_name": "Owner Share Alpha LLC", "formation_date": "2014-04-20", "status": "ACTIVE",

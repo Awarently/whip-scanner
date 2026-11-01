@@ -62,10 +62,14 @@ def f_new_high_volume(df, t, ctx):
     pp = peer_stats(df, df["total_payment"], ctx["min_peer"])
     thr = t["new_license_volume_pct"]
     m = (age < t["new_license_months"]) & ((pb["pct"].astype(float) >= thr) | (pp["pct"].astype(float) >= thr))
-    d = df.apply(lambda r: f"licensed {r['license_date']:%Y-%m-%d} ({age[r.name]:.0f} months old); "
-                           f"beneficiaries {r['beneficiaries']:,.0f} ({pb.at[r.name,'pct']:.0f}th pct), "
-                           f"payment ${r['total_payment']:,.0f} ({pp.at[r.name,'pct']:.0f}th pct)", axis=1) if m.any() else pd.Series("", index=df.index)
-    return m.fillna(False), d.where(m.fillna(False), "")
+    m = m.fillna(False)
+    d = pd.Series("", index=df.index)
+    for i in df.index[m]:
+        r = df.loc[i]
+        d[i] = (f"licensed {r['license_date']:%Y-%m-%d} ({age[i]:.0f} months old); "
+                f"beneficiaries {r['beneficiaries']:,.0f} ({pb.at[i, 'pct']:.0f}th pct), "
+                f"payment ${r['total_payment']:,.0f} ({pp.at[i, 'pct']:.0f}th pct)")
+    return m, d
 
 
 def f_virtual(df, t, ctx):

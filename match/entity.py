@@ -71,23 +71,46 @@ def merge_sector(frames: dict[str, pd.DataFrame], roles: dict[str, str], state: 
             else:
                 seen[v] = i
 
-    # fuzzy: block by street_key, then by zip5
+    # fuzzy / address matching. Pass 1: same street+ZIP+unit block; pass 2: street block; pass 3: ZIP block.
+    # Names must match (name or DBA), EXCEPT in a block where each source has exactly one row at the full
+    # address+suite ("address-only"): then the single rows are taken to be the same entity under different
+    # legal/trade names. Never merges two rows of one source, so sibling agencies stay separate.
     m = cfg["match"]
-    for col, thr in (("street_key", m["name_threshold"]), ("zip5", m["name_threshold_zip_only"])):
+    allr["_ndba"] = allr["dba"].map(norm_name)
+    addr_only: set[tuple] = set()
+
+    def name_sim(i, j):
+        a, b = allr.at[i, "_nname"], allr.at[j, "_nname"]
+        ad, bd = allr.at[i, "_ndba"], allr.at[j, "_ndba"]
+        c = [fuzz.token_sort_ratio(a, b)]
+        if bd:
+            c.append(fuzz.token_sort_ratio(a, bd))
+        if ad:
+            c.append(fuzz.token_sort_ratio(ad, b))
+        return max(c)
+
+    for col, thr in (("addr_key", m["name_threshold"]), ("street_key", m["name_threshold"]),
+                     ("zip5", m["name_threshold_zip_only"])):
         blocks = allr[allr[col].fillna("") != ""].groupby(col).groups
         for _, idx in blocks.items():
             idx = list(idx)
             if len(idx) < 2 or len(idx) > 200:
                 continue
+            per_src = allr.loc[idx, "_src"].value_counts()
             for a in range(len(idx)):
                 for b in range(a + 1, len(idx)):
                     i, j = idx[a], idx[b]
-                    if allr.at[i, "_src"] == allr.at[j, "_src"]:
+                    if allr.at[i, "_src"] == allr.at[j, "_src"] or uf.find(i) == uf.find(j):
                         continue
-                    if fuzz.token_sort_ratio(allr.at[i, "_nname"], allr.at[j, "_nname"]) >= thr:
+                    if name_sim(i, j) >= thr:
                         uf.union(i, j)
+                    elif (col == "addr_key" and allr.at[i, "unit"] != "" and
+                          per_src[allr.at[i, "_src"]] == 1 and per_src[allr.at[j, "_src"]] == 1):
+                        if uf.union(i, j):
+                            addr_only.add((i, j))
 
     allr["_cluster"] = [uf.find(i) for i in range(len(allr))]
+    ao_clusters = {uf.find(i) for i, _ in addr_only}
     recs = []
     for _, g in allr.groupby("_cluster", sort=False):
         row = {}
@@ -98,7 +121,9 @@ def merge_sector(frames: dict[str, pd.DataFrame], roles: dict[str, str], state: 
         row["is_closed"] = bool(g["is_closed"].fillna(False).astype(bool).any()) if "is_closed" in g else False
         row["sources"] = [{"source": r["_src"], "file": r["_file"], "download_date": r["_dl_date"],
                            "record_id": r["_rec_id"]} for _, r in g.iterrows()]
-        row["match_method"] = "single-source" if len(g) == 1 else "ccn/npi/license or fuzzy name+address"
+        row["match_method"] = ("single-source" if len(g) == 1 else
+                               "address+suite only (names differ; verify same entity)" if g["_cluster"].iloc[0] in ao_clusters
+                               else "ccn/npi/license or fuzzy name+address")
         recs.append(row)
     out = pd.DataFrame(recs)
     for c in ("name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip", "county", "status", "owners",

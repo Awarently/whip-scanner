@@ -11,7 +11,7 @@ import pandas as pd
 
 from core import load_config, RunLog
 from fetch import resolve_source
-from clean.build import load_source, add_address_fields
+from clean.build import load_source, add_address_fields, pecos_providers
 from match.entity import merge_sector
 from match.enrich import enrich_corp, enrich_nppes
 from match.network import annotate
@@ -59,15 +59,21 @@ def run(cfg, states, sectors, offline=False, log=None):
                     if df is not None:
                         df = add_address_fields(df, cfg) if role in ("license", "cms_provider") else df
                         frames[sid], roles[sid] = df, role
+            corp_frames = []
+            for sid, sp in specs_for(cfg, "corp", st, sector):   # Sunbiz/GA SOS exports and/or PECOS owners
+                res = resolve_source(sid, sp, st, sector, cfg, log, offline)
+                cdf = load_source(res, sp, cfg, st, sector)
+                corp_frames.append((cdf, res))
+                pp = pecos_providers(cdf)
+                if pp is not None:
+                    frames[sid + "_enrollment"], roles[sid + "_enrollment"] = add_address_fields(pp, cfg), "cms_provider"
             if not frames:
                 log.warn(f"{st}/{sector}: no provider data available; skipped (see manual instructions above)")
                 continue
             prov = merge_sector(frames, roles, st, sector, cfg)
             if prov.empty:
                 continue
-            for sid, sp in specs_for(cfg, "corp", st, sector):   # Sunbiz/GA SOS exports and/or PECOS owners
-                res = resolve_source(sid, sp, st, sector, cfg, log, offline)
-                corp = load_source(res, sp, cfg, st, sector)
+            for corp, res in corp_frames:
                 prov = enrich_corp(prov, corp, res, cfg, log)
             npp, nres = nppes_by_state.get(st, (None, None))
             prov = enrich_nppes(prov, npp, nres, cfg, log)

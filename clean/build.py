@@ -100,3 +100,18 @@ def _pivot_quality(raw: pd.DataFrame, state: str) -> pd.DataFrame:
     if "cancer_pct" in wide:
         wide["noncancer_share"] = 100 - wide["cancer_pct"]
     return wide
+
+
+def pecos_providers(corp: pd.DataFrame) -> pd.DataFrame | None:
+    """One provider row per PECOS enrollment (CCN, NPI, name, address) so state license rows, which carry
+    no CCN, can be linked to CMS utilization rows by name + address."""
+    need = {"name", "ccn", "address"}
+    if corp is None or corp.empty or not need <= set(corp.columns):
+        return None
+    cols = [c for c in ("name", "dba", "ccn", "npi", "address", "city", "state", "zip",
+                        "_src", "_file", "_dl_date") if c in corp.columns]
+    prov = corp[cols].copy()
+    prov["_rec_id"] = corp["enrollment_id"] if "enrollment_id" in corp else corp["_rec_id"]
+    prov = prov.drop_duplicates(subset=["ccn", "name"])
+    prov["_src"] = prov["_src"] + "_enrollment"
+    return prov

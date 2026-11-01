@@ -31,8 +31,8 @@ PHRASE = {
 }
 _META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip",
          "county", "license_date", "close_date", "status", "owners", "administrator", "auth_official",
-         "known_case", "known_case_reason", "score", "score_pct_of_max", "n_flags", "flags_triggered",
-         "est_exposure_usd", "cluster_id", "cluster_size", "beneficiaries", "total_payment", "payment_per_bene",
+         "known_case", "known_case_reason", "known_case_note", "score", "score_pct_of_max", "n_flags", "flags_triggered",
+         "est_exposure_usd", "match_method", "cluster_id", "cluster_size", "beneficiaries", "total_payment", "payment_per_bene",
          "peer_median_payment_per_bene"]
 
 
@@ -68,6 +68,7 @@ def write_evidence(df: pd.DataFrame, cfg: dict, outdir: Path, labels: dict) -> i
     ev = outdir / "evidence"
     ev.mkdir(parents=True, exist_ok=True)
     roles = {k: v["role"] for k, v in cfg["sources"].items()}
+    roles.update({k + "_enrollment": "cms_provider" for k, v in cfg["sources"].items() if v["role"] == "corp"})
     n = 0
     for _, r in df[(df["n_flags"] > 0) | df["known_case"]].iterrows():
         lines = [f"# {r['name']}  ({r['provider_id']})", "", f"> {DISCLAIMER}", "",

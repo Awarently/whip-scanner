@@ -125,7 +125,14 @@ def resolve_source(src_id: str, spec: dict, state: str, sector: str, cfg: dict,
                 log.info(f"{src_id}: using manual file {p} (modified {d})")
                 break
 
-    # 3. earlier dated cache
+    # 3. earlier dated cache (GA feed keeps one dated folder per download)
+    if res is None and spec.get("kind") == "ga_dch" and rawdir.exists():
+        for d in sorted((x for x in rawdir.iterdir() if x.is_dir()), reverse=True):
+            files = [d / f"{k}.csv" for k in spec["feed_files"]]
+            if all(f.exists() for f in files):
+                res = FetchResult(src_id, files[0], "cache", d.name, paths=files)
+                log.warn(f"{src_id}: using cached feed from {d.name}")
+                break
     if res is None:
         old = _dated_files(rawdir, stem)
         if old:

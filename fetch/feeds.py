@@ -107,7 +107,7 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
     person = (j["FIRST NAME - OWNER"].fillna("") + " " + j["LAST NAME - OWNER"].fillna("")).str.strip()
     out = pd.DataFrame({
         "name": j["ORGANIZATION NAME"], "dba": j["DOING BUSINESS AS NAME"], "ccn": j["CCN"], "npi": j["NPI"],
-        "address": j["ADDRESS LINE 1"], "city": j["CITY"], "state": j["STATE"], "zip": j["ZIP CODE"],
+        "address": (j["ADDRESS LINE 1"].fillna("") + " " + j["ADDRESS LINE 2"].fillna("")).str.strip(), "city": j["CITY"], "state": j["STATE"], "zip": j["ZIP CODE"],
         "formation_date": j["INCORPORATION DATE"],
         "officer_name": person.where(person != "", j["ORGANIZATION NAME - OWNER"]),
         "officer_title": j["ROLE TEXT - OWNER"].fillna("") + " " + j["TITLE - OWNER"].fillna(""),

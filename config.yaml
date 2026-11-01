@@ -1,0 +1,223 @@
+# Healthcare Fraud Red-Flag Scanner - configuration
+# Output is LEADS ONLY. Uses provider, billing, licensing and corporate data only.
+run:
+  states: [FL]                 # FL initially; GA supported
+  sectors: [home_health, hospice]
+  supported_states: [FL, GA]
+  as_of: null                  # YYYY-MM-DD; null = today
+
+paths:
+  raw: data/raw                # dated raw downloads, never overwritten
+  manual: data/manual          # manual fallback: <manual>/<STATE>/<sector>/<source>.csv
+  cache: data/cache            # per-record API caches (NPPES)
+  out: output
+
+fetch:
+  delay_seconds: 2.0           # pause between HTTP requests
+  timeout_seconds: 60
+  user_agent: "fraud-lead-scanner/0.1 (public-data research; contact via repo owner)"
+  nppes_enabled: true
+  nppes_max_lookups: 500
+
+# ---------------------------------------------------------------------------
+# Sources. url: null => no stable bulk URL; the tool prints manual instructions.
+# URLs marked UNVERIFIED were written without live access; fix here if they 404.
+# Manual file lookup order: manual/<STATE>/<sector>/, manual/<STATE>/, manual/shared/
+# ---------------------------------------------------------------------------
+sources:
+  leie:
+    role: leie
+    sectors: all
+    url: https://oig.hhs.gov/exclusions/downloadables/UPDATED.csv
+    manual_name: leie.csv
+    instructions: "Download UPDATED.csv from https://oig.hhs.gov/exclusions/exclusions-list/ (Downloadable Databases) and save as data/manual/shared/leie.csv"
+  sam:
+    role: sam
+    sectors: all
+    url: null                  # public extract needs a SAM.gov account/API key; no bypassing
+    manual_name: sam.csv
+    instructions: "Download the SAM.gov Exclusions public extract (https://sam.gov/data-services -> Exclusions) and save as data/manual/shared/sam.csv"
+  nppes:
+    role: nppes
+    sectors: all
+    url: null                  # API is queried per NPI in match/enrich.py; this is the manual fallback
+    manual_name: nppes.csv
+    instructions: "Optional. CSV with columns npi, authorized_official, enumeration_date, address (from npiregistry.cms.hhs.gov) saved as data/manual/shared/nppes.csv"
+  press:
+    role: press
+    sectors: all
+    url: null
+    manual_name: press_releases.csv
+    instructions: "Build a CSV (date,title,url,names) from justice.gov/news and oig.hhs.gov enforcement actions; 'names' = ';'-separated defendants/entities named. Save as data/manual/shared/press_releases.csv"
+  corp:
+    role: corp
+    sectors: all
+    url: null                  # Sunbiz / GA SOS: no automated scraping
+    manual_name: corp.csv
+    instructions: "FL: Sunbiz.org (search.sunbiz.org, or bulk quarterly data). GA: ecorp.sos.ga.gov. Export officers/registered agents to CSV: entity_name,formation_date,status,officer_name,officer_title,registered_agent. Save as data/manual/<STATE>/corp.csv"
+  license_hh_FL:
+    role: license
+    sectors: [home_health]
+    states: [FL]
+    url: null
+    manual_name: license.csv
+    instructions: "FL AHCA FloridaHealthFinder (quality.healthfinder.fl.gov) -> Facility/Provider Search -> Home Health Agency -> export results. Save as data/manual/FL/home_health/license.csv"
+  license_hh_GA:
+    role: license
+    sectors: [home_health]
+    states: [GA]
+    url: null
+    manual_name: license.csv
+    instructions: "GA DCH HFR Facility Finder (forms.dch.georgia.gov/HFRD): export BOTH 'Home Health Agencies' and 'Private Home Care Providers'; concatenate (add column facility_type). Save as data/manual/GA/home_health/license.csv"
+  license_hospice_FL:
+    role: license
+    sectors: [hospice]
+    states: [FL]
+    url: null
+    manual_name: license.csv
+    instructions: "FL AHCA FloridaHealthFinder -> Hospice. Save as data/manual/FL/hospice/license.csv"
+  license_hospice_GA:
+    role: license
+    sectors: [hospice]
+    states: [GA]
+    url: null
+    manual_name: license.csv
+    instructions: "GA DCH HFR Facility Finder -> Hospice. Save as data/manual/GA/hospice/license.csv"
+  cms_provider_hh:
+    role: cms_provider
+    sectors: [home_health]
+    url: "https://data.cms.gov/provider-data/api/1/datastore/query/6jpm-sxkc/0/download?format=csv"   # UNVERIFIED dataset id
+    manual_name: cms_provider.csv
+    instructions: "CMS Provider Data Catalog -> Home Health Care - Agencies (data.cms.gov/provider-data). Download CSV, save as data/manual/<STATE>/home_health/cms_provider.csv"
+  cms_util_hh:
+    role: cms_util
+    sectors: [home_health]
+    url: null                  # Medicare utilization-by-provider lives on data.cms.gov data-api; set when verified
+    manual_name: cms_util.csv
+    instructions: "data.cms.gov -> Medicare Home Health Agency utilization/payment by provider. Needs ccn/npi, beneficiaries, episodes, total payment. Save as data/manual/<STATE>/home_health/cms_util.csv"
+  cms_provider_hospice:
+    role: cms_provider
+    sectors: [hospice]
+    url: "https://data.cms.gov/provider-data/api/1/datastore/query/yc9t-dgbk/0/download?format=csv"  # UNVERIFIED dataset id
+    manual_name: cms_provider.csv
+    instructions: "CMS Provider Data Catalog -> Hospice - General Information. Save as data/manual/<STATE>/hospice/cms_provider.csv"
+  cms_quality_hospice:
+    role: cms_quality
+    sectors: [hospice]
+    url: null
+    manual_name: cms_quality.csv
+    instructions: "CMS PDC -> Hospice - Provider Data (Hospice Compare measures, e.g. visits in last days of life). Save as data/manual/<STATE>/hospice/cms_quality.csv"
+  cms_util_hospice:
+    role: cms_util
+    sectors: [hospice]
+    url: null
+    manual_name: cms_util.csv
+    instructions: "data.cms.gov -> Medicare Hospice utilization/payment by provider (ALOS, live discharges, beneficiaries, payment, cap). Save as data/manual/<STATE>/hospice/cms_util.csv"
+
+# ---------------------------------------------------------------------------
+# Column aliases: canonical -> normalized header names (lowercase, non-alnum -> _)
+# Extend when a real file uses a different header.
+# ---------------------------------------------------------------------------
+columns:
+  name: [name, provider_name, facility_name, agency_name, legal_name, bus_name, entity_name]
+  dba: [dba, doing_business_as, trade_name]
+  license_no: [license_no, license_number, license, license_nbr, lic_no, facility_id]
+  npi: [npi, npi_number, provider_npi]
+  ccn: [ccn, cms_certification_number_ccn, cms_certification_number, provider_ccn, provider_number, certification_number]
+  address: [address, address_line_1, address_1, street_address, street, location_address, practice_address]
+  city: [city, city_town, town]
+  state: [state, st]
+  zip: [zip, zip_code, postal_code, zipcode]
+  county: [county, county_name, county_parish]
+  license_date: [license_date, original_license_date, license_effective_date, issue_date, certification_date, date_first_licensed, effective_date]
+  close_date: [close_date, closure_date, termination_date, license_end_date, expiration_date_closed, end_date]
+  status: [status, license_status, facility_status]
+  owners: [owners, owner, owner_name, owner_names, ownership]
+  administrator: [administrator, admin, administrator_name, director]
+  auth_official: [auth_official, authorized_official, authorized_official_name]
+  registered_agent: [registered_agent, agent]
+  sanction_flag: [sanction_flag, sanctioned, state_sanction, has_sanction, enforcement_action]
+  sanction_same_conduct: [sanction_same_conduct]
+  inspection_failed: [inspection_failed, failed_inspections, deficiencies, condition_level_deficiencies, immediate_jeopardy]
+  virtual_flag: [virtual_flag, cmra_flag, mailbox_flag]
+  beneficiaries: [beneficiaries, total_beneficiaries, tot_benes, total_unduplicated_beneficiaries, total_hha_beneficiaries, total_hospice_beneficiaries]
+  episodes: [episodes, total_episodes, tot_episodes, total_hha_episodes]
+  total_payment: [total_payment, tot_mdcr_pymt_amt, total_medicare_payment, total_medicare_payment_amount, total_hha_medicare_payment_amount, total_hospice_medicare_payment_amount, tot_pymt]
+  avg_los: [avg_los, average_length_of_stay, alos, avg_length_of_stay, average_los_days]
+  live_discharge_pct: [live_discharge_pct, live_discharge_rate, pct_live_discharges, percent_live_discharges]
+  noncancer_share: [noncancer_share, non_cancer_share, dementia_noncancer_share, pct_non_cancer_dx, pct_dementia_noncancer]
+  cap_utilization_pct: [cap_utilization_pct, cap_utilization, aggregate_cap_utilization_pct]
+  cap_hit_years: [cap_hit_years, years_over_cap, cap_exceeded_years]
+  final_days_visit_pct: [final_days_visit_pct, visits_in_last_days_of_life, hospice_visits_last_3_days, visit_intensity_final_days]
+  enumeration_date: [enumeration_date, npi_enumeration_date]
+  formation_date: [formation_date, filing_date, date_filed, date_incorporated]
+  officer_name: [officer_name, officer, member_name, manager_name, principal_name]
+  officer_title: [officer_title, title, position]
+  year: [year, data_year, reporting_year]
+
+# ---------------------------------------------------------------------------
+clean:
+  virtual_markers: ["REGUS", "WEWORK", "SPACES", "DAVINCI VIRTUAL", "VIRTUAL OFFICE", "UPS STORE", "POSTNET", "PACK AND SHIP", "MAILBOXES ETC"]
+  closed_status_words: ["CLOSED", "INACTIVE", "REVOKED", "EXPIRED", "WITHDRAWN", "SURRENDER", "TERMINATED", "VOLUNTARILY"]
+  admin_title_words: ["ADMIN", "DIRECTOR OF NURS", "CLINICAL MANAGER"]
+  agent_title_words: ["REGISTERED AGENT", "AGENT"]
+
+match:
+  name_threshold: 92           # token_sort_ratio for cross-source provider match
+  name_threshold_zip_only: 96  # when only ZIP (not street) agrees
+  person_threshold: 94         # fuzzy owner/official canonicalisation and LEIE matching
+  org_threshold: 94
+  corp_name_threshold: 95
+  max_group_size: 25           # shared-key groups larger than this are ignored (agents, big chains)
+  churn_months: 12
+  network_roles: [owners, administrator, auth_official]   # registered agents excluded (law firms)
+
+# ---------------------------------------------------------------------------
+scoring:
+  min_peer_group: 10           # county peers used only if >= this many; else state
+  exposure_note: "Estimated exposure = (provider payment per beneficiary - peer median) x beneficiaries, floored at 0. A statistical gap vs peers, not an overpayment finding."
+  home_health:
+    thresholds:
+      shared_address_min: 2
+      shared_person_min: 2
+      new_license_months: 24
+      new_license_volume_pct: 75      # percentile of beneficiaries or payment
+      top_pct: 95                     # payment/bene and episodes/bene
+    weights:
+      shared_address: 3
+      shared_person: 3
+      new_license_high_volume: 3
+      high_payment_per_bene: 3
+      high_episodes_per_bene: 2
+      license_churn: 3
+      virtual_address: 2
+      owner_exclusion_match: 5
+      linked_known_case: 4
+      sanctions_or_failed_inspection: 2
+      cross_sector_network: 2
+  hospice:
+    thresholds:
+      shared_address_min: 2
+      shared_person_min: 2
+      new_license_months: 24
+      new_license_volume_pct: 75
+      top_pct: 95
+      live_discharge_pct: 95          # percentile
+      cap_utilization_pct: 95         # absolute % of aggregate cap
+      cap_hit_years: 2
+      final_days_bottom_pct: 5        # bottom percentile of visits in final days
+    weights:
+      long_length_of_stay: 3
+      high_live_discharge: 3
+      high_noncancer_share: 2
+      frequent_cap: 3
+      low_final_days_visits: 2
+      new_hospice_high_billing: 3
+      shared_address_or_owner: 3
+      owner_exclusion_match: 5
+      linked_known_case: 4
+      cross_sector_network: 2
+  min_score_for_lead: 1
+
+report:
+  top_n: 50

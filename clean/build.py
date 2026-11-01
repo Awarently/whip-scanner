@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pandas as pd
 from .loaders import read_table, canon, hkey
-from .normalize import norm_address, clean_str
+from .normalize import norm_address, clean_str, to_num
 
 
 _TYPE_FROM_STEM = {"hha": "Home Health Agency", "phcp": "Private Home Care Provider"}

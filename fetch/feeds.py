@@ -16,10 +16,13 @@ API_DATA = "https://data.cms.gov/data-api/v1/dataset/{id}/data"
 GA_FEED = "https://forms.dch.georgia.gov/hfrd/FACSEARCH.aspx"
 
 
-def _get(url, cfg, log, params=None, stream=False):
+def _get(url, cfg, log, params=None, stream=False, ua=True):
+    """ua=False sends the library's default User-Agent. data.cms.gov's Provider Data Catalog metastore
+    returns 403 to our custom research User-Agent but serves the same public data to a plain script
+    client; the repo owner explicitly approved this for data.cms.gov only (2026-11-01)."""
     f = cfg["fetch"]
     time.sleep(f["delay_seconds"])
-    r = requests.get(url, params=params, headers={"User-Agent": f["user_agent"]},
+    r = requests.get(url, params=params, headers={"User-Agent": f["user_agent"]} if ua else None,
                      timeout=f["timeout_seconds"] * (4 if stream else 1), stream=stream)
     if r.status_code != 200:
         raise requests.HTTPError(f"HTTP {r.status_code} for {url}")
@@ -58,10 +61,10 @@ def ga_dch(spec, cfg, log, ddir: Path) -> list[Path]:
 # ------------------------------------------------------------------ CMS PDC
 def pdc(spec, cfg, log, dest: Path) -> Path:
     """CMS Provider Data Catalog dataset: resolve the current CSV link via the metastore API."""
-    meta = _get(PDC_META.format(id=spec["dataset_id"]), cfg, log).json()
+    meta = _get(PDC_META.format(id=spec["dataset_id"]), cfg, log, ua=False).json()
     url = meta["distribution"][0]["downloadURL"]
     log.info(f"{spec['dataset_id']}: '{meta.get('title')}' modified {meta.get('modified')} -> {url.rsplit('/', 1)[-1]}")
-    r = _get(url, cfg, log, stream=True)
+    r = _get(url, cfg, log, stream=True, ua=False)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
     with open(tmp, "wb") as fh:

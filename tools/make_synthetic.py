@@ -103,4 +103,31 @@ def generate(root: Path, seed: int = 7) -> dict:
                   {"entity_name": "Owner Share Alpha LLC", "formation_date": "2014-04-20", "status": "ACTIVE",
                    "officer_name": "Generic Agent Services", "officer_title": "REGISTERED AGENT", "registered_agent": "Generic Agent Services"}
                   ]).to_csv(m / "FL/corp.csv", index=False)
+    _ga(m, ids, pool, rnd)
     return ids
+
+
+def _ga(m: Path, ids: dict, pool: list, rnd: random.Random) -> None:
+    """Georgia: HHA export + Private Home Care Provider export (two files), plus a hospice license list."""
+    gh = m / "GA" / "home_health"
+    gh.mkdir(parents=True, exist_ok=True)
+    (m / "GA" / "hospice").mkdir(parents=True, exist_ok=True)
+    cols = ["Facility Name", "License Number", "Address", "City", "Zip", "County", "Original License Date", "Status", "Owner", "Administrator"]
+
+    def row(name, lic, street, zip_, county, date, owner, status="Active", admin=""):
+        return [name, lic, street, "Gatown", zip_, county, date, status, owner, admin]
+    hha = [row(f"Ga Sample HHA {i:02d} Inc", f"GAH{i:04d}", f"{10 + i * 3} Peach Street", "30301", "FULTON", "2015-06-01", pool.pop(), admin=pool.pop())
+           for i in range(15)]
+    phcp = [row(f"Ga Sample Home Care {i:02d} LLC", f"GAP{i:04d}", f"{400 + i * 5} Pine Road", "30302", "FULTON", "2016-01-01", pool.pop())
+            for i in range(15)]
+    # shared suite across the two license types, shared owner across the two types, virtual address
+    hha.append(row("Ga Suite Share HHA Inc", "GAH9001", "500 Peachtree Street, Suite 12", "30303", "FULTON", "2014-01-01", pool.pop()))
+    phcp.append(row("Ga Suite Share Home Care LLC", "GAP9001", "500 Peachtree St Ste 12", "30303", "FULTON", "2019-01-01", pool.pop()))
+    hha.append(row("Ga Owner Share HHA Inc", "GAH9002", "1 Magnolia Way", "30304", "DEKALB", "2013-01-01", "Gail Ravenel"))
+    phcp.append(row("Ga Owner Share Home Care LLC", "GAP9002", "2 Magnolia Way", "30304", "DEKALB", "2020-01-01", "Ravenel, Gail"))
+    phcp.append(row("Ga Mailbox Home Care LLC", "GAP9003", "PMB 220, 77 Elm Street", "30305", "FULTON", "2021-01-01", pool.pop()))
+    pd.DataFrame(hha, columns=cols).to_csv(gh / "license_hha.csv", index=False)
+    pd.DataFrame(phcp, columns=cols).to_csv(gh / "license_phcp.csv", index=False)
+    ho = [row(f"Ga Sample Hospice {i:02d} Inc", f"GAO{i:04d}", f"{900 + i * 4} Cherry Lane", "30306", "FULTON", "2012-01-01", pool.pop()) for i in range(12)]
+    ho.append(row("Ga Hospice Owner Share Inc", "GAO9001", "9 Dogwood Drive", "30307", "FULTON", "2018-01-01", "Gail Ravenel"))
+    pd.DataFrame(ho, columns=cols).to_csv(m / "GA" / "hospice" / "license.csv", index=False)

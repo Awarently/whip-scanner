@@ -76,3 +76,34 @@ def test_outputs(result):
         assert (out / p).exists(), p
     assert any((out / "combined/evidence").glob("*.md"))
     assert clusters["cross_sector"].any()
+
+
+@pytest.fixture(scope="module")
+def ga(tmp_path_factory):
+    root = tmp_path_factory.mktemp("ga")
+    generate(root)
+    cfg = load_config()
+    cfg["paths"].update({"manual": root / "manual", "raw": root / "raw", "cache": root / "cache", "out": root / "out"})
+    cfg["fetch"]["nppes_enabled"] = False
+    comb, _, out = run(cfg, ["GA"], ["home_health", "hospice"], offline=True)
+    return comb.set_index("name"), out
+
+
+def test_ga_loads_both_license_types(ga):
+    r, out = ga
+    hh = r[r["sector"] == "home_health"]
+    assert set(hh["facility_type"]) == {"Home Health Agency", "Private Home Care Provider"}
+    assert len(hh) == 15 + 15 + 5
+    assert all(r["state"] == "GA")
+    log = (out / "run_log.txt").read_text()
+    assert "license_hh_GA" in log and "license_hha.csv" in log and "license_phcp.csv" in log
+
+
+def test_ga_flags(ga):
+    r, _ = ga
+    assert "shared_address" in flags(r, "Ga Suite Share HHA Inc")           # across HHA + PHCP files
+    assert "shared_address" in flags(r, "Ga Suite Share Home Care LLC")
+    assert "shared_person" in flags(r, "Ga Owner Share HHA Inc")
+    assert "virtual_address" in flags(r, "Ga Mailbox Home Care LLC")
+    assert "cross_sector_network" in flags(r, "Ga Hospice Owner Share Inc")
+    assert (r["provider_id"].str.startswith("GA-")).all()

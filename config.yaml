@@ -66,9 +66,10 @@ sources:
     role: license
     sectors: [home_health]
     states: [GA]
-    url: null
+    url: null                  # HFR Facility Finder is an interactive form; no bulk URL, no scraping
     manual_name: license.csv
-    instructions: "GA DCH HFR Facility Finder (forms.dch.georgia.gov/HFRD): export BOTH 'Home Health Agencies' and 'Private Home Care Providers'; concatenate (add column facility_type). Save as data/manual/GA/home_health/license.csv"
+    manual_glob: "license*.csv"   # loads every match and concatenates them
+    instructions: "GA DCH HFR Facility Finder (forms.dch.georgia.gov/HFRD): export BOTH 'Home Health Agencies' -> data/manual/GA/home_health/license_hha.csv AND 'Private Home Care Providers' -> data/manual/GA/home_health/license_phcp.csv. The file name sets facility_type (Private Home Care Providers are state-licensed, usually have no CCN/Medicare data)."
   license_hospice_FL:
     role: license
     sectors: [hospice]
@@ -82,6 +83,7 @@ sources:
     states: [GA]
     url: null
     manual_name: license.csv
+    manual_glob: "license*.csv"
     instructions: "GA DCH HFR Facility Finder -> Hospice. Save as data/manual/GA/hospice/license.csv"
   cms_provider_hh:
     role: cms_provider
@@ -132,7 +134,8 @@ columns:
   license_date: [license_date, original_license_date, license_effective_date, issue_date, certification_date, date_first_licensed, effective_date]
   close_date: [close_date, closure_date, termination_date, license_end_date, expiration_date_closed, end_date]
   status: [status, license_status, facility_status]
-  owners: [owners, owner, owner_name, owner_names, ownership]
+  facility_type: [facility_type, provider_type, license_type, type_of_facility]
+  owners: [owners, owner, owner_name, owner_names, ownership, licensee, licensee_name]
   administrator: [administrator, admin, administrator_name, director]
   auth_official: [auth_official, authorized_official, authorized_official_name]
   registered_agent: [registered_agent, agent]

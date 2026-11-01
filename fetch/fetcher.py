@@ -23,6 +23,7 @@ class FetchResult:
     path: Path | None
     mode: str               # auto | cache | manual | missing
     date: str | None
+    paths: list | None = None   # several files (e.g. GA HHA + Private Home Care exports)
 
 
 def _manual_candidates(cfg, spec, state, sector) -> list[Path]:
@@ -84,6 +85,14 @@ def resolve_source(src_id: str, spec: dict, state: str, sector: str, cfg: dict,
         log.info(f"{src_id}: no automated bulk URL configured; trying manual file")
 
     # 2. manual
+    if res is None and spec.get("manual_glob"):
+        for d in dict.fromkeys(p.parent for p in _manual_candidates(cfg, spec, state, sector)):
+            files = sorted(d.glob(spec["manual_glob"])) if d.exists() else []
+            if files:
+                dmax = max(dt.date.fromtimestamp(f.stat().st_mtime) for f in files).isoformat()
+                res = FetchResult(src_id, files[0], "manual", dmax, paths=files)
+                log.info(f"{src_id}: using {len(files)} manual file(s) in {d}: {', '.join(f.name for f in files)}")
+                break
     if res is None:
         for p in _manual_candidates(cfg, spec, state, sector):
             if p.exists():
@@ -111,7 +120,7 @@ def resolve_source(src_id: str, spec: dict, state: str, sector: str, cfg: dict,
                      f"[expected at {want}]")
 
     log.record_source(source=src_id, state=state, sector=sector, mode=res.mode,
-                      file=str(res.path) if res.path else None, date=res.date)
+                      file="; ".join(str(x) for x in (res.paths or [res.path])) if res.path else None, date=res.date)
     return res
 
 

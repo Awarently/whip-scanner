@@ -11,7 +11,7 @@ from rapidfuzz import fuzz
 from clean.normalize import norm_name, clean_str
 
 PRIORITY = ["license", "cms_provider", "cms_util", "cms_quality"]
-CANON_COLS = ["name", "dba", "license_no", "npi", "ccn", "address", "city", "state", "zip", "county",
+CANON_COLS = ["name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "state", "zip", "county",
               "license_date", "close_date", "is_closed", "status", "owners", "administrator", "auth_official",
               "sanction_flag", "sanction_same_conduct", "inspection_failed", "virtual_flag", "beneficiaries",
               "episodes", "total_payment", "avg_los", "live_discharge_pct", "noncancer_share",
@@ -101,7 +101,7 @@ def merge_sector(frames: dict[str, pd.DataFrame], roles: dict[str, str], state: 
         row["match_method"] = "single-source" if len(g) == 1 else "ccn/npi/license or fuzzy name+address"
         recs.append(row)
     out = pd.DataFrame(recs)
-    for c in ("name", "dba", "license_no", "npi", "ccn", "address", "city", "zip", "county", "status", "owners",
+    for c in ("name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip", "county", "status", "owners",
               "administrator", "auth_official", "sanction_flag", "sanction_same_conduct", "virtual_flag",
               "street_norm", "unit", "zip5", "street_key", "addr_key"):
         out[c] = out[c].astype(object).where(out[c].notna(), "")

@@ -29,7 +29,7 @@ PHRASE = {
     "new_hospice_high_billing": "is a new hospice with high billing",
     "shared_address_or_owner": "shares an address or owner with other hospices/home health agencies",
 }
-_META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "npi", "ccn", "address", "city", "zip",
+_META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip",
          "county", "license_date", "close_date", "status", "owners", "administrator", "auth_official",
          "known_case", "known_case_reason", "score", "score_pct_of_max", "n_flags", "flags_triggered",
          "est_exposure_usd", "cluster_id", "cluster_size", "beneficiaries", "total_payment", "payment_per_bene",

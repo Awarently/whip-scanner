@@ -48,6 +48,16 @@ sector: `license.csv`, `cms_provider.csv`, `cms_util.csv` (hospice also `cms_qua
 `leie.csv`, and optionally `sam.csv`, `press_releases.csv`, `corp.csv`, `nppes.csv`.
 Percent columns are read as 0-100.
 
+**Georgia license lists.** GA DCH HFR Facility Finder (forms.dch.georgia.gov/HFRD) is an interactive form,
+so it is manual-only. Export both lists and save them as
+`data/manual/GA/home_health/license_hha.csv` (Home Health Agencies) and
+`data/manual/GA/home_health/license_phcp.csv` (Private Home Care Providers); hospice goes in
+`data/manual/GA/hospice/license.csv`. All `license*.csv` files in the folder are concatenated and
+`facility_type` is set from the file name. Private Home Care Providers are state-licensed and usually have
+no CCN or Medicare data, so only the address/owner/churn/virtual/sanction flags can fire for them.
+Column names in the GA exports are unverified; extend `config.yaml: columns` if a header is not recognised.
+Run with `python main.py --states GA`.
+
 ## Caveats
 - CMS dataset URLs and column aliases were written without live access and are **unverified**. Fix
   `config.yaml` if a download 404s or a header is not recognised (unmapped columns are dropped silently).

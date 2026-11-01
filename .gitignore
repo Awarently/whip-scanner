@@ -3,3 +3,18 @@ data_demo/
 output/
 __pycache__/
 .pytest_cache/
+
+# Never commit data or results (any depth, any case)
+[Dd]ata/
+[Oo]utput/
+data_*/
+*.csv
+*.xlsx
+*.xls
+*.zip
+*.parquet
+*.json
+run_log.txt
+evidence/
+report.html
+.venv/

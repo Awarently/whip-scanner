@@ -87,6 +87,11 @@ def f_linked_known(df, t, ctx):
     return m, df["linked_known_case_detail"].where(m, "")
 
 
+def f_chain(df, t, ctx):
+    m = df["chain_owner_count"] > 0
+    return m, ("chain/corporate ownership (low weight): " + df["chain_owner_detail"]).where(m, "")
+
+
 def f_cross_sector(df, t, ctx):
     m = df["cluster_cross_sector"].astype(bool)
     return m, df.apply(lambda r: f"cluster {r['cluster_id']} spans home health + hospice ({int(r['cluster_size'])} providers)", axis=1).where(m, "")
@@ -130,6 +135,7 @@ HOME_HEALTH = [
     Flag("linked_known_case", "Linked to known case", f_linked_known, ("press", "leie", "sam")),
     Flag("sanctions_or_failed_inspection", "Sanctions or failed inspections", f_sanction, ("license",)),
     Flag("cross_sector_network", "Network spans home health + hospice", f_cross_sector, ("license", "corp")),
+    Flag("chain_ownership", "Chain/corporate owner (many providers)", f_chain, ("corp",)),
 ]
 
 # ---------------------------------------------------------------- hospice
@@ -160,6 +166,7 @@ HOSPICE = [
     Flag("owner_exclusion_match", "Owner/official fuzzy-matches LEIE/SAM", f_owner_excl, ("leie", "sam", "corp", "nppes")),
     Flag("linked_known_case", "Linked to known case", f_linked_known, ("press", "leie", "sam")),
     Flag("cross_sector_network", "Network spans home health + hospice", f_cross_sector, ("license", "corp")),
+    Flag("chain_ownership", "Chain/corporate owner (many providers)", f_chain, ("corp",)),
 ]
 
 FLAGS = {"home_health": HOME_HEALTH, "hospice": HOSPICE}

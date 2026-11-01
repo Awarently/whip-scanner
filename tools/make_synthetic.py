@@ -41,8 +41,8 @@ def generate(root: Path, seed: int = 7) -> dict:
     for i in range(60):
         n += 1
         add_hh(f"hh{i}", f"Sample Home Health {i:02d} LLC", f"{100 + i * 7} Oak Avenue", "33101" if i % 2 else "33102",
-               "ALPHA" if i % 2 else "BETA", f"20{rnd.randint(10, 21)}-0{rnd.randint(1, 9)}-15", person(),
-               f"10{n:04d}", rnd.gauss(3000, 300), rnd.randint(80, 400), eps=rnd.gauss(1.8, 0.1))
+               "ALPHA" if i % 2 else "BETA", f"20{rnd.randint(10, 21)}-0{rnd.randint(1, 9)}-15",
+               "Chain Parent Holdings LLC" if i < 8 else person(), f"10{n:04d}", rnd.gauss(3000, 300), rnd.randint(80, 400), eps=rnd.gauss(1.8, 0.1))
     base = 70
     add_hh("addrA", "Suite Twin One LLC", "100 Main Street Suite 200", "33101", "ALPHA", "2015-03-01", person(), "200001", 3000, 150)
     add_hh("addrB", "Suite Twin Two LLC", "100 Main St., Ste 200", "33101", "ALPHA", "2016-03-01", person(), "200002", 3000, 150)

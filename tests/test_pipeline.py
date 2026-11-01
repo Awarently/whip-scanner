@@ -107,3 +107,14 @@ def test_ga_flags(ga):
     assert "virtual_address" in flags(r, "Ga Mailbox Home Care LLC")
     assert "cross_sector_network" in flags(r, "Ga Hospice Owner Share Inc")
     assert (r["provider_id"].str.startswith("GA-")).all()
+
+
+def test_chain_owner_downweighted(result):
+    r, clusters, _ = result
+    chain = r[r.index.str.startswith("Sample Home Health 0") & (r["chain_owner_count"] > 0)]
+    assert len(chain) == 8                                   # 8 agencies under one corporate parent
+    assert not chain["flags_triggered"].str.contains("shared_person").any()
+    assert chain["flags_triggered"].str.contains("chain_ownership").all()
+    assert chain["score"].max() <= 0.5                       # chain flag alone is a low-weight signal
+    assert not clusters["provider_names"].str.contains("Sample Home Health 00").any()
+    assert "shared_person" in flags(r, "Owner Share Beta LLC")   # small 2-agency network still flagged

@@ -20,6 +20,7 @@ PHRASE = {
     "owner_exclusion_match": "has an owner/official whose name fuzzy-matches an excluded individual or entity",
     "linked_known_case": "is linked by owner/address to a provider or person already in a public enforcement matter",
     "sanctions_or_failed_inspection": "has sanctions or failed inspections on record",
+    "chain_ownership": "is owned by a chain/corporate parent with many providers (weak signal on its own)",
     "cross_sector_network": "belongs to a network spanning both home health and hospice",
     "long_length_of_stay": "has an average length of stay in the top 5% of peers",
     "high_live_discharge": "has a high live-discharge rate versus peers",

@@ -52,8 +52,12 @@ def add_people(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     return df
 
 
-def build_edges(df: pd.DataFrame, cfg: dict, log=None) -> list[dict]:
+def build_edges(df: pd.DataFrame, cfg: dict, log=None):
+    """Returns (edges, chain_edges). A person/organisation tied to more than `small_network_max` providers
+    is a chain/corporate parent: its links go to chain_edges (informational, low weight) and are NOT used for
+    shared-owner flags, clusters, churn or known-case linking. Address links are never treated as chain."""
     maxg = cfg["match"]["max_group_size"]
+    small = cfg["match"]["small_network_max"]
     idx = list(df.index)
     groups: dict[tuple, list] = defaultdict(list)
     for i in idx:
@@ -62,24 +66,32 @@ def build_edges(df: pd.DataFrame, cfg: dict, log=None) -> list[dict]:
             groups[("addr", r["addr_key"])].append(i)
         for k in r["people"]:
             groups[("person", k)].append(i)
-    edges, skipped = [], 0
+    edges, chain_edges, skipped, chains = [], [], 0, 0
     for (typ, key), members in groups.items():
         if len(members) < 2:
             continue
         if len(members) > maxg:
             skipped += 1
+            for m in members:                       # still count them as chain members
+                chain_edges.append({"a": m, "b": m, "type": "chain_person", "key": key, "size": len(members)})
+            continue
+        if typ == "person" and len(members) > small:
+            chains += 1
+            for m in members:
+                chain_edges.append({"a": m, "b": m, "type": "chain_person", "key": key, "size": len(members)})
             continue
         for a, b in itertools.combinations(members, 2):
             edges.append({"a": a, "b": b, "type": typ, "key": key})
-    if log and skipped:
-        log.warn(f"network: ignored {skipped} shared keys with >{maxg} members (likely agents/chains)")
-    return edges
+    if log:
+        log.info(f"network: {chains} chain/corporate owners (> {small} providers) and {skipped} very large "
+                 f"keys (> {maxg}) treated as chain ownership, excluded from shared-owner flags and clusters")
+    return edges, chain_edges
 
 
 def annotate(df: pd.DataFrame, cfg: dict, log=None):
     """Adds link-count columns, churn flags and cluster ids. Returns (df, edges, clusters_df)."""
     df = add_people(df, cfg)
-    edges = build_edges(df, cfg, log)
+    edges, chain_edges = build_edges(df, cfg, log)
     n = len(df)
     pos = {i: p for p, i in enumerate(df.index)}
     sector = df["sector"].to_dict()
@@ -103,6 +115,14 @@ def annotate(df: pd.DataFrame, cfg: dict, log=None):
         "; ".join([f"addr-shared with {', '.join(sorted(ids[j] for j in partners[i]['addr']))}" if partners[i]["addr"] else "",
                    f"person-shared with {', '.join(sorted(ids[j] for j in partners[i]['person']))}" if partners[i]["person"] else ""]).strip("; ")
         for i in df.index]
+
+    chain = defaultdict(dict)
+    for e in chain_edges:
+        chain[e["a"]][e["key"]] = e["size"]
+    df["chain_owner_count"] = [len(chain[i]) for i in df.index]
+    df["chain_owner_detail"] = ["; ".join(f"{k.replace('ORG:', '')} ({n} providers)"
+                                          for k, n in sorted(chain[i].items(), key=lambda kv: -kv[1])[:5])
+                                for i in df.index]
 
     # churn: closed provider, successor licensed within N months, same sector, shared owner or address
     months = cfg["match"]["churn_months"]

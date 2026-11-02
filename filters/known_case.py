@@ -153,7 +153,8 @@ def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press
         hits, press_hits, recs, strengths = [], [], [], []
         mids = r["owner_mid"] if isinstance(r.get("owner_mid"), dict) else {}
         infos = r["owner_info"] if isinstance(r.get("owner_info"), dict) else {}
-        for key in r["people"]:
+        pb = r["people_board"] if isinstance(r.get("people_board"), dict) else {}
+        for key in list(r["people"]) + [k for k in pb if k not in r["people"]]:
             for ks, lst in ((excl, hits), (press, press_hits)):
                 m = ks.match_org(key[4:], othr) if key.startswith("ORG:") else ks.match_person(key, pthr)
                 if not m:

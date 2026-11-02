@@ -81,7 +81,7 @@ def write_evidence(df: pd.DataFrame, cfg: dict, outdir: Path, labels: dict) -> i
                  f"- Address: {_s(r['address'])}, {_s(r['city'])} {_s(r['zip'])}  (normalised: {r['addr_key']})",
                  f"- Licensed: {_s(r['license_date'])[:10]}   Closed: {_s(r['close_date'])[:10]}   Status: {_s(r['status'])}",
                  f"- Owners/officers: {_s(r['owners'])}", f"- Administrator: {_s(r['administrator'])}",
-                 f"- Authorised official: {_s(r['auth_official'])}", f"- Registered agent: {_s(r.get('registered_agent'))}",
+                 f"- Authorised official: {_s(r['auth_official'])}", f"- Board members only (not used to link providers): {_s(r.get('board_members'))}", f"- Registered agent: {_s(r.get('registered_agent'))}",
                  f"- Network cluster: {_s(r['cluster_id']) or 'none'} (size {int(r['cluster_size'])})", "",
                  "## Known-case check"]
         if r["known_case"]:

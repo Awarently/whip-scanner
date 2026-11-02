@@ -196,3 +196,21 @@ def test_owner_exclusion_strength_and_review_file(result):
     rv = pd.read_csv(out / "combined" / "identity_review.csv")
     assert {"owner", "leie_excl_type", "middle_initial_status", "match_strength"} <= set(rv.columns)
     assert "Owner Excluded Match LLC" in set(rv["provider"])
+
+
+def test_board_only_directors_do_not_link_providers(result):
+    r, clusters, _ = result
+    assert "shared_person" not in flags(r, "Board Share Alpha LLC")
+    assert "Boardy Mcdirector" in r.loc["Board Share Alpha LLC", "board_members"]
+    assert not clusters["provider_names"].str.contains("Board Share Alpha").any()
+    # an officer (even one who is also a corporate director) still links the two agencies
+    assert "shared_person" in flags(r, "Officer Share Alpha LLC")
+    assert "shared_person" in flags(r, "Officer Share Beta LLC")
+
+def test_is_board_role():
+    from match.enrich import is_board_role
+    assert is_board_role("CORPORATE DIRECTOR BOARD MEMBER") and is_board_role("CORPORATE DIRECTOR")
+    assert is_board_role("CORPORATE DIRECTOR DIRECTOR")
+    assert not is_board_role("CORPORATE DIRECTOR PRESIDENT") and not is_board_role("CORPORATE OFFICER SECRETARY")
+    assert not is_board_role("CORPORATE DIRECTOR DIRECTOR OF MANAGED CARE")
+    assert not is_board_role("5% OR GREATER DIRECT OWNERSHIP INTEREST")

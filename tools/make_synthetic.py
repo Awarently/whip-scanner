@@ -63,6 +63,10 @@ def generate(root: Path, seed: int = 7) -> dict:
     add_hh("relicP", "Relicensed Old Agency LLC", "70 Walnut Road", "33101", "ALPHA", "2026-03-01", person(), "200016", 6500, 1200,
            cert="2010-01-01", eps=2.0)
     add_hh("mildR", "Mild Payment Outlier LLC", "71 Walnut Road", "33102", "BETA", "2012-01-01", person(), "200017", 3900, 150)
+    add_hh("boardA", "Board Share Alpha LLC", "81 Maple Street", "33101", "ALPHA", "2012-01-01", person(), "200018", 3000, 150)
+    add_hh("boardB", "Board Share Beta LLC", "82 Maple Street", "33102", "BETA", "2012-01-01", person(), "200019", 3000, 150)
+    add_hh("offA", "Officer Share Alpha LLC", "83 Maple Street", "33101", "ALPHA", "2012-01-01", person(), "200020", 3000, 150)
+    add_hh("offB", "Officer Share Beta LLC", "84 Maple Street", "33102", "BETA", "2012-01-01", person(), "200021", 3000, 150)
     add_hh("sanctO", "Sanctioned Agency LLC", "61 Walnut Road", "33101", "ALPHA", "2012-01-01", person(), "200015", 3000, 150, sanction="Y", insp=3)
     pd.DataFrame(lic).to_csv(m / "FL/home_health/license.csv", index=False)
     pd.DataFrame(prov).to_csv(m / "FL/home_health/cms_provider.csv", index=False)
@@ -104,7 +108,12 @@ def generate(root: Path, seed: int = 7) -> dict:
     pd.DataFrame([{"entity_name": "Owner Share Alpha LLC", "formation_date": "2014-04-20", "status": "ACTIVE",
                    "officer_name": "Zed Quill", "officer_title": "MGR", "registered_agent": "Generic Agent Services"},
                   {"entity_name": "Owner Share Alpha LLC", "formation_date": "2014-04-20", "status": "ACTIVE",
-                   "officer_name": "Generic Agent Services", "officer_title": "REGISTERED AGENT", "registered_agent": "Generic Agent Services"}
+                   "officer_name": "Generic Agent Services", "officer_title": "REGISTERED AGENT", "registered_agent": "Generic Agent Services"},
+                  # same director on two boards (no link) vs same president at two agencies (link)
+                  {"entity_name": "Board Share Alpha LLC", "officer_name": "Boardy Mcdirector", "officer_title": "CORPORATE DIRECTOR BOARD MEMBER"},
+                  {"entity_name": "Board Share Beta LLC", "officer_name": "Boardy Mcdirector", "officer_title": "CORPORATE DIRECTOR BOARD MEMBER"},
+                  {"entity_name": "Officer Share Alpha LLC", "officer_name": "Officerly Mcpresident", "officer_title": "CORPORATE OFFICER PRESIDENT"},
+                  {"entity_name": "Officer Share Beta LLC", "officer_name": "Officerly Mcpresident", "officer_title": "CORPORATE DIRECTOR PRESIDENT"},
                   ]).to_csv(m / "FL/corp.csv", index=False)
     _ga(m, ids, pool, rnd)
     return ids

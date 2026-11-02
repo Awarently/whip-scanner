@@ -50,6 +50,16 @@ def add_people(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         out.append(m)
     df = df.copy()
     df["people"] = out
+    # board-only directors: not used for links, but still checked against exclusion lists
+    boards = []
+    for _, r in df.iterrows():
+        d = {}
+        for nm in split_people(r.get("board_members", "") if pd.notna(r.get("board_members", "")) else ""):
+            k = person_key(nm)
+            if k:
+                d[canon.get(k, k)] = {"board"}
+        boards.append(d)
+    df["people_board"] = boards
     if "owner_natl" not in df:
         df["owner_natl"] = [{} for _ in range(len(df))]
     return df

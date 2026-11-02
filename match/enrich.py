@@ -6,6 +6,19 @@ from clean.normalize import norm_name, clean_str, person_key
 from fetch import nppes_lookup
 
 
+_BOARD_WORDS = {"", "BOARD MEMBER", "BOARD", "DIRECTOR", "MEMBER", "BOARD OF DIRECTORS", "CHAIR", "CHAIRMAN",
+                "CHAIRPERSON", "VICE CHAIR", "BOARD CHAIR", "BOARD CHAIRMAN", "BOARD DIRECTOR", "TRUSTEE", "BOARD TRUSTEE"}
+
+
+def is_board_role(role: str) -> bool:
+    """PECOS role text is '<ROLE> <TITLE>'. Board-only = a corporate director with no officer or management
+    title (e.g. 'CORPORATE DIRECTOR BOARD MEMBER'). 'CORPORATE DIRECTOR PRESIDENT' is an officer, not board-only."""
+    r = " ".join(clean_str(role).upper().split())
+    if not r.startswith("CORPORATE DIRECTOR"):
+        return False
+    return r[len("CORPORATE DIRECTOR"):].strip() in _BOARD_WORDS
+
+
 def _join(*parts) -> str:
     seen, out = set(), []
     for p in parts:
@@ -21,6 +34,8 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
     for c in ("registered_agent", "corp_formation_date", "corp_status"):
         if c not in prov:
             prov[c] = pd.NA
+    if "board_members" not in prov:
+        prov["board_members"] = ""
     for c in ("owner_natl", "owner_mid", "owner_info"):
         if c not in prov:
             prov[c] = [{} for _ in range(len(prov))]
@@ -34,11 +49,21 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
     admin_w, agent_w = cfg["clean"]["admin_title_words"], cfg["clean"]["agent_title_words"]
     ents, by_ccn, by_npi = {}, {}, {}
     for n, g in corp.groupby("_n"):
-        owners, admins = [], []
+        owners, admins, boards = [], [], []
+        roles_by_person: dict[str, list[str]] = {}
+        for _, r in g.iterrows():
+            k = person_key(clean_str(r.get("officer_name", "")))
+            if k:
+                roles_by_person.setdefault(k, []).append(clean_str(r.get("officer_title", "")))
+        # board-only individuals are kept for the exclusion-list check but not used to link providers
+        board_keys = {k for k, ts in roles_by_person.items() if not k.startswith("ORG:") and all(is_board_role(t) for t in ts)}
         for _, r in g.iterrows():
             title = clean_str(r.get("officer_title", "")).upper()
             who = clean_str(r.get("officer_name", ""))
             if not who or any(w in title for w in agent_w):
+                continue
+            if person_key(who) in board_keys:
+                boards.append(who)
                 continue
             (admins if any(w in title for w in admin_w) else owners).append(who)
         mids = {}
@@ -63,7 +88,7 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
                 v = rr.get("owner_national")
                 if k and pd.notna(v):
                     natl[k] = max(natl.get(k, 0), int(v))
-        ents[n] = {"info": info, "mids": mids, "natl": natl, "owners": _join(*owners), "admins": _join(*admins),
+        ents[n] = {"boards": _join(*boards), "info": info, "mids": mids, "natl": natl, "owners": _join(*owners), "admins": _join(*admins),
                    "agent": clean_str(g.get("registered_agent", pd.Series([""])).iloc[0]),
                    "formed": g["formation_date"].dropna().min() if "formation_date" in g else pd.NaT,
                    "status": clean_str(g["status"].iloc[0]) if "status" in g else "",
@@ -96,6 +121,7 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
         prov.at[i, "owner_info"] = {**curi, **e["info"]}
         curm = prov.at[i, "owner_mid"] if isinstance(prov.at[i, "owner_mid"], dict) else {}
         prov.at[i, "owner_mid"] = {**curm, **e["mids"]}
+        prov.at[i, "board_members"] = _join(r["board_members"] if pd.notna(r["board_members"]) else "", e["boards"])
         prov.at[i, "registered_agent"] = e["agent"]
         prov.at[i, "corp_formation_date"] = e["formed"]
         prov.at[i, "corp_status"] = e["status"]

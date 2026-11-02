@@ -13,14 +13,20 @@ def peer_stats(df: pd.DataFrame, values: pd.Series, min_peer: int = 10) -> pd.Da
     c_pct = (cg.rank(pct=True) * 100).reindex(d.index)
     c_med = cg.transform("median").reindex(d.index)
     c_n = cg.transform("count").reindex(d.index)
+    st_mad = (d["v"] - st_med).abs().groupby(d["state"]).transform("median")
+    sub = d.dropna(subset=["county"])
+    c_mad = ((sub["v"] - c_med.reindex(sub.index)).abs()
+             .groupby([sub["state"], sub["county"]]).transform("median")).reindex(d.index)
     use_c = c_n.fillna(0) >= min_peer
     out = pd.DataFrame({
         "pct": c_pct.where(use_c, st_pct),
         "median": c_med.where(use_c, st_med),
+        "mad": c_mad.where(use_c, st_mad),
         "n": c_n.where(use_c, st_n),
         "group": pd.Series(["county" if u else "state" for u in use_c], index=d.index),
     })
-    for c in ("pct", "median", "n"):
+    out["robust_z"] = 0.6745 * (d["v"] - out["median"].astype(float)) / out["mad"].astype(float).where(out["mad"].astype(float) > 0)
+    for c in ("pct", "median", "n", "mad", "robust_z"):
         out[c] = pd.to_numeric(out[c], errors="coerce").astype(float)
     out.loc[d["v"].isna(), ["pct", "median", "n"]] = float("nan")
     return out

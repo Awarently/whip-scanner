@@ -198,6 +198,8 @@ columns:
   service_days: [tot_srvc_days]
   neoplasm_pct: [prmry_dx_neobld_pct]
   ownership_pct: [ownership_pct, percentage_ownership]
+  owner_id: [owner_id]
+  owner_national: [owner_national_providers]
 
 # ---------------------------------------------------------------------------
 clean:
@@ -228,7 +230,10 @@ scoring:
       shared_person_min: 2
       new_license_months: 24
       new_license_volume_pct: 75      # percentile of beneficiaries or payment
-      top_pct: 95                     # payment/bene and episodes/bene
+      top_pct: 95                     # rank test (necessary, not sufficient)
+      min_beneficiaries: 30           # ignore tiny caseloads (averages are noise)
+      payment_ratio: [1.25, 1.4]      # payment/bene vs peer median: weak (half weight) / strong (full)
+      episodes_ratio: [1.25, 1.4]
     weights:
       shared_address: 3
       shared_person: 3
@@ -249,7 +254,11 @@ scoring:
       new_license_months: 24
       new_license_volume_pct: 75
       top_pct: 95
-      live_discharge_pct: 95          # percentile
+      min_beneficiaries: 30
+      los_ratio: [1.25, 1.5]          # average length of stay vs peer median
+      live_discharge_gap_pts: [8, 15] # percentage points above peer median
+      noncancer_gap_pts: [10, 15]
+      final_days_ratio: [0.67, 0.5]   # visits-in-final-days vs peer median (low is suspicious)
       cap_utilization_pct: 95         # absolute % of aggregate cap
       cap_hit_years: 2
       final_days_bottom_pct: 5        # bottom percentile of visits in final days

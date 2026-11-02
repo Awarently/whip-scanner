@@ -50,12 +50,14 @@ def add_people(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         out.append(m)
     df = df.copy()
     df["people"] = out
+    if "owner_natl" not in df:
+        df["owner_natl"] = [{} for _ in range(len(df))]
     return df
 
 
 def build_edges(df: pd.DataFrame, cfg: dict, log=None):
     """Returns (edges, chain_edges). A person/organisation tied to more than `small_network_max` providers
-    is a chain/corporate parent: its links go to chain_edges (informational, low weight) and are NOT used for
+    is a chain/corporate parent (also when its national PECOS provider count exceeds it): its links go to chain_edges (informational, low weight) and are NOT used for
     shared-owner flags, clusters, churn or known-case linking. Address links are never treated as chain."""
     maxg = cfg["match"]["max_group_size"]
     small = cfg["match"]["small_network_max"]
@@ -76,10 +78,12 @@ def build_edges(df: pd.DataFrame, cfg: dict, log=None):
             for m in members:                       # still count them as chain members
                 chain_edges.append({"a": m, "b": m, "type": "chain_person", "key": key, "size": len(members)})
             continue
-        if typ == "person" and len(members) > small:
+        natl = max((df.at[m, "owner_natl"].get(key, 0) if isinstance(df.at[m, "owner_natl"], dict) else 0)
+                   for m in members) if typ == "person" else 0
+        if typ == "person" and (len(members) > small or natl > small):
             chains += 1
             for m in members:
-                chain_edges.append({"a": m, "b": m, "type": "chain_person", "key": key, "size": len(members)})
+                chain_edges.append({"a": m, "b": m, "type": "chain_person", "key": key, "size": max(len(members), natl)})
             continue
         for a, b in itertools.combinations(members, 2):
             edges.append({"a": a, "b": b, "type": typ, "key": key})

@@ -6,7 +6,7 @@ from .normalize import to_num, to_date, clean_str
 
 NUMERIC = ["beneficiaries", "episodes", "total_payment", "avg_los", "live_discharge_pct", "noncancer_share",
            "cap_utilization_pct", "cap_hit_years", "final_days_visit_pct", "inspection_failed", "year",
-           "service_days", "neoplasm_pct", "ownership_pct"]
+           "service_days", "neoplasm_pct", "ownership_pct", "owner_national"]
 DATES = ["license_date", "cert_date", "close_date", "formation_date", "enumeration_date"]
 
 

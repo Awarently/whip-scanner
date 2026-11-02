@@ -62,6 +62,7 @@ def generate(root: Path, seed: int = 7) -> dict:
     add_hh("crossM", "Cross Sector Home Health LLC", "60 Walnut Road", "33101", "ALPHA", "2012-01-01", "Cross Sector Owner", "200014", 3000, 150)
     add_hh("relicP", "Relicensed Old Agency LLC", "70 Walnut Road", "33101", "ALPHA", "2026-03-01", person(), "200016", 6500, 1200,
            cert="2010-01-01", eps=2.0)
+    add_hh("mildR", "Mild Payment Outlier LLC", "71 Walnut Road", "33102", "BETA", "2012-01-01", person(), "200017", 3900, 150)
     add_hh("sanctO", "Sanctioned Agency LLC", "61 Walnut Road", "33101", "ALPHA", "2012-01-01", person(), "200015", 3000, 150, sanction="Y", insp=3)
     pd.DataFrame(lic).to_csv(m / "FL/home_health/license.csv", index=False)
     pd.DataFrame(prov).to_csv(m / "FL/home_health/cms_provider.csv", index=False)

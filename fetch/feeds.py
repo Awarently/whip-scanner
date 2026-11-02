@@ -105,7 +105,11 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
     if enr.empty:
         raise ValueError(f"no PECOS enrollments for {state}")
     own = pd.DataFrame(_api_rows(spec["owners_id"], cfg, log))
-    own = own[own["ENROLLMENT ID"].isin(set(enr["ENROLLMENT ID"]))]
+    # how many Medicare providers of this type each owner (by PECOS associate id) is tied to NATIONALLY;
+    # state-level counts hide corporate parents (e.g. a private-equity fund with 68 agencies, 5 in one state)
+    natl = own.groupby("ASSOCIATE ID - OWNER")["ENROLLMENT ID"].nunique()
+    own = own[own["ENROLLMENT ID"].isin(set(enr["ENROLLMENT ID"]))].copy()
+    own["natl"] = own["ASSOCIATE ID - OWNER"].map(natl)
     j = own.merge(enr, on="ENROLLMENT ID", how="inner", suffixes=("_own", ""))
     person = (j["FIRST NAME - OWNER"].fillna("") + " " + j["LAST NAME - OWNER"].fillna("")).str.strip()
     out = pd.DataFrame({
@@ -114,7 +118,8 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
         "formation_date": j["INCORPORATION DATE"],
         "officer_name": person.where(person != "", j["ORGANIZATION NAME - OWNER"]),
         "officer_title": j["ROLE TEXT - OWNER"].fillna("") + " " + j["TITLE - OWNER"].fillna(""),
-        "ownership_pct": j["PERCENTAGE OWNERSHIP"], "enrollment_id": j["ENROLLMENT ID"]})
+        "ownership_pct": j["PERCENTAGE OWNERSHIP"], "enrollment_id": j["ENROLLMENT ID"],
+        "owner_id": j["ASSOCIATE ID - OWNER"], "owner_national_providers": j["natl"]})
     dest.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(dest, index=False)
     log.info(f"PECOS: {len(enr)} enrollments, {len(out)} owner rows for {state}")

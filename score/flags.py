@@ -61,7 +61,8 @@ def f_new_high_volume(df, t, ctx):
     pb = peer_stats(df, df["beneficiaries"], ctx["min_peer"])
     pp = peer_stats(df, df["total_payment"], ctx["min_peer"])
     thr = t["new_license_volume_pct"]
-    m = (age < t["new_license_months"]) & ((pb["pct"].astype(float) >= thr) | (pp["pct"].astype(float) >= thr))
+    m = ((age < t["new_license_months"]) & ((pb["pct"].astype(float) >= thr) | (pp["pct"].astype(float) >= thr))
+         & (pd.to_numeric(df["beneficiaries"], errors="coerce") >= t["min_beneficiaries"]))
     m = m.fillna(False)
     d = pd.Series("", index=df.index)
     for i in df.index[m]:
@@ -105,13 +106,44 @@ def f_churn(df, t, ctx):
 
 
 # ---------------------------------------------------------------- home health
-def _top_pct_flag(series_fn, label, fmt, unit=""):
+def _outlier_flag(series_fn, label, fmt, unit, tkey, mode, needs_benes=True):
+    """Graded peer-outlier flag. Fires only if the rank test AND a minimum size of gap AND a minimum
+    caseload all hold, so a top-5% rank with a tiny real gap does not count.
+
+      mode "ratio_high": value / peer median  >= weak (strength 0.5) or >= strong (1.0)
+      mode "gap_high"  : value - peer median  >= weak / strong (percentage points)
+      mode "ratio_low" : value / peer median  <= weak / strong (e.g. 0.67 / 0.5)
+    """
     def fn(df, t, ctx):
-        s = series_fn(df)
+        s = pd.to_numeric(series_fn(df), errors="coerce")
         st = peer_stats(df, s, ctx["min_peer"])
-        m = (st["pct"].astype(float) >= t["top_pct"]).fillna(False)
-        d = pd.Series([f"{label}: " + desc(s[i], st, i, fmt, unit) if m[i] else "" for i in df.index], index=df.index)
-        return m, d
+        weak, strong = t[tkey]
+        if mode == "ratio_low":
+            rank_ok = st["pct"] <= t["final_days_bottom_pct"]
+            measure = s / st["median"]
+            ok_w, ok_s = measure <= weak, measure <= strong
+        else:
+            rank_ok = st["pct"] >= t["top_pct"]
+            measure = (s / st["median"]) if mode == "ratio_high" else (s - st["median"])
+            ok_w, ok_s = measure >= weak, measure >= strong
+        benes = pd.to_numeric(df["beneficiaries"], errors="coerce")
+        gate = benes >= t["min_beneficiaries"]
+        if not needs_benes:
+            gate = gate | benes.isna()
+        base = (rank_ok & gate).fillna(False)
+        strength = pd.Series(0.0, index=df.index)
+        strength[base & ok_w.fillna(False)] = 0.5
+        strength[base & ok_s.fillna(False)] = 1.0
+        detail = pd.Series("", index=df.index)
+        for i in df.index[strength > 0]:
+            gap = s[i] - st.at[i, "median"]
+            z = st.at[i, "robust_z"]
+            detail[i] = (f"{label}: {fmt.format(s[i])}{unit} = {st.at[i, 'pct']:.0f}th percentile of {int(st.at[i, 'n'])} "
+                         f"{st.at[i, 'group']} peers; peer median {fmt.format(st.at[i, 'median'])}{unit}; "
+                         f"{s[i] / st.at[i, 'median']:.2f}x median (gap {gap:+,.2f}{unit}); "
+                         f"robust z {z:.1f}; {'STRONG' if strength[i] == 1 else 'weak'} signal "
+                         f"(thresholds {weak}/{strong}), {int(benes[i]) if pd.notna(benes[i]) else 'n/a'} beneficiaries")
+        return strength, detail
     return fn
 
 
@@ -129,8 +161,8 @@ HOME_HEALTH = [
     Flag("shared_address", "2+ agencies at same address/suite", f_shared_address, ("license", "cms_provider")),
     Flag("shared_person", "Shared owner/administrator/official", f_shared_person, ("license", "corp", "nppes")),
     Flag("new_license_high_volume", "License <24 mo with high volume", f_new_high_volume, ("license", "cms_util")),
-    Flag("high_payment_per_bene", "Payment per beneficiary top 5%", _top_pct_flag(_ppb, "payment/beneficiary", "${:,.0f}"), ("cms_util",)),
-    Flag("high_episodes_per_bene", "Episodes per beneficiary top 5%", _top_pct_flag(_eppb, "episodes/beneficiary", "{:,.2f}"), ("cms_util",)),
+    Flag("high_payment_per_bene", "Payment per beneficiary top 5%", _outlier_flag(_ppb, "payment/beneficiary", "${:,.0f}", "", "payment_ratio", "ratio_high"), ("cms_util",)),
+    Flag("high_episodes_per_bene", "Episodes per beneficiary top 5%", _outlier_flag(_eppb, "episodes/beneficiary", "{:,.2f}", "", "episodes_ratio", "ratio_high"), ("cms_util",)),
     Flag("license_churn", "Closure then new agency (same owner/address) <12 mo", f_churn, ("license",)),
     Flag("virtual_address", "Virtual/mailbox/PO box address", f_virtual, ("license", "cms_provider")),
     Flag("owner_exclusion_match", "Owner/official fuzzy-matches LEIE/SAM", f_owner_excl, ("leie", "sam", "corp", "nppes")),
@@ -149,20 +181,12 @@ def f_cap(df, t, ctx):
     return m.fillna(False), d.where(m.fillna(False), "")
 
 
-def f_low_final(df, t, ctx):
-    s = pd.to_numeric(df["final_days_visit_pct"], errors="coerce")
-    st = peer_stats(df, s, ctx["min_peer"])
-    m = (st["pct"].astype(float) <= t["final_days_bottom_pct"]).fillna(False)
-    d = pd.Series([("visits in final days of life: " + desc(s[i], st, i, "{:,.1f}", "%")) if m[i] else "" for i in df.index], index=df.index)
-    return m, d
-
-
 HOSPICE = [
-    Flag("long_length_of_stay", "Average length of stay top 5%", _top_pct_flag(lambda d: d["avg_los"], "average length of stay", "{:,.0f}", " days"), ("cms_util",)),
-    Flag("high_live_discharge", "High live-discharge rate", _top_pct_flag(lambda d: d["live_discharge_pct"], "live-discharge rate", "{:,.1f}", "%"), ("cms_util",)),
-    Flag("high_noncancer_share", "High non-cancer/dementia diagnosis share", _top_pct_flag(lambda d: d["noncancer_share"], "non-cancer/dementia share", "{:,.1f}", "%"), ("cms_util",)),
+    Flag("long_length_of_stay", "Average length of stay top 5%", _outlier_flag(lambda d: d["avg_los"], "average length of stay", "{:,.0f}", " days", "los_ratio", "ratio_high"), ("cms_util",)),
+    Flag("high_live_discharge", "High live-discharge rate", _outlier_flag(lambda d: d["live_discharge_pct"], "live-discharge rate", "{:,.1f}", "%", "live_discharge_gap_pts", "gap_high"), ("cms_util",)),
+    Flag("high_noncancer_share", "High non-cancer/dementia diagnosis share", _outlier_flag(lambda d: d["noncancer_share"], "non-cancer share", "{:,.1f}", "%", "noncancer_gap_pts", "gap_high"), ("cms_util",)),
     Flag("frequent_cap", "Frequently hits aggregate cap", f_cap, ("cms_util",)),
-    Flag("low_final_days_visits", "Low visit intensity in final days", f_low_final, ("cms_quality",)),
+    Flag("low_final_days_visits", "Low visit intensity in final days", _outlier_flag(lambda d: d["final_days_visit_pct"], "visits in final days of life", "{:,.1f}", "%", "final_days_ratio", "ratio_low", needs_benes=False), ("cms_quality",)),
     Flag("new_hospice_high_billing", "New hospice with high billing", f_new_high_volume, ("license", "cms_util")),
     Flag("shared_address_or_owner", "Shared address/owner with hospice or HHA", f_shared_addr_or_owner_any, ("license", "corp", "nppes")),
     Flag("owner_exclusion_match", "Owner/official fuzzy-matches LEIE/SAM", f_owner_excl, ("leie", "sam", "corp", "nppes")),

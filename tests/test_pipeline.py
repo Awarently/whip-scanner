@@ -137,3 +137,42 @@ def test_graph_clusters_have_hubs(result):
     suite = clusters[clusters["provider_names"].str.contains("Suite Twin One")].iloc[0]
     assert suite["hub_type"] == "address" and "100 MAIN ST" in suite["hub_node"]
     assert "Largest networks" in (out / "combined" / "report.html").read_text()
+
+
+def test_graded_outlier_flags(result):
+    r, _, _ = result
+    strong = r.loc["Brand New Fast Billing LLC", "detail_high_payment_per_bene"]
+    assert "STRONG" in strong and "x median" in strong and "robust z" in strong
+    mild = r.loc["Mild Payment Outlier LLC"]
+    assert mild["flag_high_payment_per_bene"] == 1 and "weak signal" in mild["detail_high_payment_per_bene"]
+    assert mild["score"] == 1.5                                   # weight 3 x 0.5 for a weak signal
+
+
+def test_rank_alone_is_not_enough():
+    import numpy as np
+    from score.flags import HOME_HEALTH
+    n = 40
+    df = pd.DataFrame({"state": "FL", "county": "X", "beneficiaries": 100.0,
+                       "total_payment": [100000.0] * (n - 1) + [110000.0]})   # top of the group but only 1.1x median
+    fl = next(f for f in HOME_HEALTH if f.name == "high_payment_per_bene")
+    cfg = load_config()["scoring"]["home_health"]["thresholds"]
+    strength, _ = fl.fn(df, cfg, {"min_peer": 10, "as_of": None})
+    assert (strength == 0).all()
+    df["beneficiaries"] = 10.0                                            # tiny caseload is ignored too
+    df["total_payment"] = [100000.0] * (n - 1) + [300000.0]
+    strength, _ = fl.fn(df, cfg, {"min_peer": 10, "as_of": None})
+    assert (strength == 0).all()
+
+
+def test_national_chain_owner_is_chain_even_with_few_local_providers():
+    from match.network import build_edges, add_people
+    cfg = load_config()
+    df = pd.DataFrame({"provider_id": ["a", "b"], "sector": "home_health", "addr_key": "", "is_virtual": False,
+                       "owners": ["ADVENT FUND LP", "ADVENT FUND LP"], "administrator": "", "auth_official": ""})
+    df = add_people(df, cfg)
+    edges, chain = build_edges(df, cfg)
+    assert len(edges) == 1 and not chain                                   # two local providers: a small network
+    key = next(iter(df.at[0, "people"]))
+    df["owner_natl"] = [{key: 68}, {key: 68}]
+    edges, chain = build_edges(df, cfg)
+    assert not edges and chain and chain[0]["size"] == 68                   # 68 providers nationally: chain

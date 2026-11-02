@@ -14,10 +14,10 @@ def score_sector(df: pd.DataFrame, sector: str, cfg: dict) -> pd.DataFrame:
     names = []
     for fl in FLAGS[sector]:
         mask, detail = fl.fn(df, sc["thresholds"], ctx)
-        mask = mask.fillna(False).astype(bool)
-        df[f"flag_{fl.name}"] = mask.astype(int)
+        strength = mask.fillna(0).astype(float).clip(0, 1)          # booleans -> 0/1; graded flags 0.5 or 1
+        df[f"flag_{fl.name}"] = (strength > 0).astype(int)
         df[f"detail_{fl.name}"] = detail.fillna("")
-        score += mask * sc["weights"].get(fl.name, 1)
+        score += strength * sc["weights"].get(fl.name, 1)
         names.append(fl.name)
     df["score"] = score
     df["n_flags"] = df[[f"flag_{n}" for n in names]].sum(axis=1)

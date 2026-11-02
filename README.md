@@ -39,7 +39,10 @@ python -m pytest -q tests
    state sanction (`sanction_same_conduct=Y`) are listed but **excluded from ranking**. Their owners and
    addresses mark other providers as `linked_known_case`.
 5. **score/**: one engine; per-sector flags in `score/flags.py`, weights/thresholds in `config.yaml`.
-   Percentiles use county peers when >= `min_peer_group`, else state.
+   Percentiles use county peers when >= `min_peer_group`, else state. A rank alone never fires a billing flag:
+   it also needs a minimum gap vs the peer median (ratio, or percentage points for rates) and a minimum
+   caseload (`min_beneficiaries`). Two levels: weak (half weight) and strong (full weight). Evidence shows
+   the ratio, the gap, and a robust z-score (median/MAD).
 6. **report/**: per state/sector and `combined/`: `red_flags.csv`, `clusters.csv`, `evidence/<id>.md`,
    `report.html` (top 50), plus `run_log.txt` in the run folder (`output/<YYYYMMDD>/`).
 

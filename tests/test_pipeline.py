@@ -118,3 +118,11 @@ def test_chain_owner_downweighted(result):
     assert chain["score"].max() <= 0.5                       # chain flag alone is a low-weight signal
     assert not clusters["provider_names"].str.contains("Sample Home Health 00").any()
     assert "shared_person" in flags(r, "Owner Share Beta LLC")   # small 2-agency network still flagged
+
+
+def test_relicensed_agency_not_new(result):
+    r, _, _ = result
+    row = r.loc["Relicensed Old Agency LLC"]
+    assert row["operating_since"].year == 2010                       # CMS certification date wins
+    assert "new_license_high_volume" not in flags(r, "Relicensed Old Agency LLC")
+    assert "new_license_high_volume" in flags(r, "Brand New Fast Billing LLC")

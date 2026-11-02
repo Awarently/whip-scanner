@@ -25,7 +25,7 @@ def _blank(df):
 
 
 def _age_months(df, asof):
-    return ((pd.Timestamp(asof) - df["license_date"]).dt.days / 30.4375)
+    return ((pd.Timestamp(asof) - df["operating_since"]).dt.days / 30.4375)
 
 
 def _ppb(df):
@@ -66,7 +66,9 @@ def f_new_high_volume(df, t, ctx):
     d = pd.Series("", index=df.index)
     for i in df.index[m]:
         r = df.loc[i]
-        d[i] = (f"licensed {r['license_date']:%Y-%m-%d} ({age[i]:.0f} months old); "
+        cert = "" if pd.isna(r["cert_date"]) else f", CMS certified {r['cert_date']:%Y-%m-%d}"
+        d[i] = (f"operating since {r['operating_since']:%Y-%m-%d} (state license {r['license_date']:%Y-%m-%d}{cert}) "
+                f"= {age[i]:.0f} months old; "
                 f"beneficiaries {r['beneficiaries']:,.0f} ({pb.at[i, 'pct']:.0f}th pct), "
                 f"payment ${r['total_payment']:,.0f} ({pp.at[i, 'pct']:.0f}th pct)")
     return m, d

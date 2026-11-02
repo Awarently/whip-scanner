@@ -133,7 +133,7 @@ def annotate(df: pd.DataFrame, cfg: dict, log=None):
         if sector[a] != sector[b]:
             continue
         for old, new in ((a, b), (b, a)):
-            cd, ld = df.at[old, "close_date"], df.at[new, "license_date"]
+            cd, ld = df.at[old, "close_date"], df.at[new, "operating_since"]
             if pd.notna(cd) and pd.notna(ld) and cd <= ld <= cd + pd.DateOffset(months=months):
                 msg = (f"{ids[old]} closed {cd:%Y-%m-%d}; {ids[new]} licensed {ld:%Y-%m-%d} "
                        f"(shared {e['type']}: {e['key']})")

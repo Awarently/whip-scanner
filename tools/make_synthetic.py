@@ -26,12 +26,12 @@ def generate(root: Path, seed: int = 7) -> dict:
     lic, prov, util = [], [], []
 
     def add_hh(key, name, street, zip_, county, lic_date, owner, ccn, ppb, bene, status="Active", close="",
-               sanction="", insp=0, npi="", admin="", eps=1.8):
+               sanction="", insp=0, npi="", admin="", eps=1.8, cert=None):
         lic.append({"Provider Name": name, "License Number": f"HHA{ccn[-4:]}", "Address Line 1": street, "City": "Testville",
                     "Zip": zip_, "County": county, "License Date": lic_date, "Status": status, "Close Date": close,
                     "Owner": owner, "Administrator": admin, "Sanction": sanction, "Failed Inspections": insp})
         prov.append({"CMS Certification Number (CCN)": ccn, "Provider Name": name.upper().replace("LLC", ", L.L.C."),
-                     "Address Line 1": street.upper(), "ZIP Code": zip_, "NPI": npi, "Certification Date": lic_date})
+                     "Address Line 1": street.upper(), "ZIP Code": zip_, "NPI": npi, "Certification Date": cert or lic_date})
         if bene:
             util.append({"CCN": ccn, "Total Beneficiaries": bene, "Total Episodes": round(bene * eps),
                          "Total Medicare Payment": round(ppb * bene), "Year": 2024})
@@ -60,6 +60,8 @@ def generate(root: Path, seed: int = 7) -> dict:
     add_hh("linkL", "Neighbor Of Known LLC", "300 Maple Ave #5", "33101", "ALPHA", "2018-01-01", person(), "200012", 3000, 150)
     add_hh("pressN", "Press Linked Owner LLC", "22 Ash Street", "33102", "BETA", "2012-01-01", "Pressnamed Defendant", "200013", 3000, 150)
     add_hh("crossM", "Cross Sector Home Health LLC", "60 Walnut Road", "33101", "ALPHA", "2012-01-01", "Cross Sector Owner", "200014", 3000, 150)
+    add_hh("relicP", "Relicensed Old Agency LLC", "70 Walnut Road", "33101", "ALPHA", "2026-03-01", person(), "200016", 6500, 1200,
+           cert="2010-01-01", eps=2.0)
     add_hh("sanctO", "Sanctioned Agency LLC", "61 Walnut Road", "33101", "ALPHA", "2012-01-01", person(), "200015", 3000, 150, sanction="Y", insp=3)
     pd.DataFrame(lic).to_csv(m / "FL/home_health/license.csv", index=False)
     pd.DataFrame(prov).to_csv(m / "FL/home_health/cms_provider.csv", index=False)

@@ -12,7 +12,7 @@ from clean.normalize import norm_name, clean_str
 
 PRIORITY = ["license", "cms_provider", "cms_util", "cms_quality"]
 CANON_COLS = ["name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "state", "zip", "county",
-              "license_date", "close_date", "is_closed", "status", "owners", "administrator", "auth_official",
+              "license_date", "cert_date", "close_date", "is_closed", "status", "owners", "administrator", "auth_official",
               "sanction_flag", "sanction_same_conduct", "inspection_failed", "virtual_flag", "beneficiaries",
               "episodes", "total_payment", "avg_los", "live_discharge_pct", "noncancer_share",
               "cap_utilization_pct", "cap_hit_years", "final_days_visit_pct",
@@ -134,8 +134,11 @@ def merge_sector(frames: dict[str, pd.DataFrame], roles: dict[str, str], state: 
               "noncancer_share", "cap_utilization_pct", "cap_hit_years", "final_days_visit_pct"):
         out[c] = pd.to_numeric(out[c], errors="coerce").astype(float)
     out["is_virtual"] = out["is_virtual"].fillna(False).astype(bool)
-    for c in ("license_date", "close_date"):
+    for c in ("license_date", "cert_date", "close_date"):
         out[c] = pd.to_datetime(out[c], errors="coerce")
+    # "operating since": a state license date is often the date of the CURRENT license (renewal, change of
+    # ownership, relicensing), so take the earliest of the state license date and CMS certification date.
+    out["operating_since"] = out[["license_date", "cert_date"]].min(axis=1)
     out["state"] = state
     out["sector"] = sector
     pre = {"home_health": "HH", "hospice": "HO"}[sector]

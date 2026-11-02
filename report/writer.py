@@ -31,7 +31,7 @@ PHRASE = {
     "shared_address_or_owner": "shares an address or owner with other hospices/home health agencies",
 }
 _META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip",
-         "county", "license_date", "cert_date", "operating_since", "close_date", "status", "owners", "administrator", "auth_official",
+         "county", "license_date", "cert_date", "operating_since", "close_date", "status", "owners", "administrator", "auth_official", "board_members",
          "known_case", "known_case_reason", "known_case_note", "score", "score_pct_of_max", "n_flags", "flags_triggered",
          "est_exposure_usd", "match_method", "cluster_id", "cluster_size", "cluster_hub", "beneficiaries", "total_payment", "payment_per_bene",
          "peer_median_payment_per_bene"]

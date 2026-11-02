@@ -126,3 +126,14 @@ def test_relicensed_agency_not_new(result):
     assert row["operating_since"].year == 2010                       # CMS certification date wins
     assert "new_license_high_volume" not in flags(r, "Relicensed Old Agency LLC")
     assert "new_license_high_volume" in flags(r, "Brand New Fast Billing LLC")
+
+
+def test_graph_clusters_have_hubs(result):
+    r, clusters, out = result
+    assert {"hub_node", "hub_type", "hub_degree", "bridge_nodes", "n_owner_nodes", "n_address_nodes"} <= set(clusters.columns)
+    cross = clusters[clusters["cross_sector"]].iloc[0]
+    assert "CROSS OWNER" in cross["hub_node"] and cross["hub_degree"] >= 2
+    assert clusters.iloc[0]["cross_sector"]                                  # cross-sector networks listed first
+    suite = clusters[clusters["provider_names"].str.contains("Suite Twin One")].iloc[0]
+    assert suite["hub_type"] == "address" and "100 MAIN ST" in suite["hub_node"]
+    assert "Largest networks" in (out / "combined" / "report.html").read_text()

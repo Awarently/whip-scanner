@@ -5,6 +5,7 @@ from collections import defaultdict
 import pandas as pd
 from rapidfuzz import fuzz
 from clean.normalize import person_key, split_people, clean_str
+from . import graph
 
 
 def canonicalize_people(keys: set[str], thr: int) -> dict[str, str]:
@@ -141,40 +142,5 @@ def annotate(df: pd.DataFrame, cfg: dict, log=None):
                     df.at[x, "license_churn"] = True
                     df.at[x, "churn_detail"] = (df.at[x, "churn_detail"] + " | " + msg).strip(" |")
 
-    # clusters (connected components)
-    parent = {i: i for i in df.index}
-
-    def find(x):
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-    for e in edges:
-        parent[find(e["a"])] = find(e["b"])
-    comp = defaultdict(list)
-    for i in df.index:
-        comp[find(i)].append(i)
-    df["cluster_id"] = ""
-    df["cluster_size"] = 1
-    df["cluster_cross_sector"] = False
-    rows, k = [], 0
-    for _, members in sorted(comp.items(), key=lambda kv: -len(kv[1])):
-        if len(members) < 2:
-            continue
-        k += 1
-        cid = f"C{k:04d}"
-        sub = df.loc[members]
-        sectors = sorted(sub["sector"].unique())
-        links = [e for e in edges if e["a"] in members]
-        df.loc[members, "cluster_id"] = cid
-        df.loc[members, "cluster_size"] = len(members)
-        df.loc[members, "cluster_cross_sector"] = len(sectors) > 1
-        rows.append({"cluster_id": cid, "size": len(members), "sectors": "+".join(sectors),
-                     "cross_sector": len(sectors) > 1, "states": "+".join(sorted(sub["state"].unique())),
-                     "provider_ids": "; ".join(sub["provider_id"]),
-                     "provider_names": "; ".join(sub["name"].astype(str)),
-                     "link_types": "+".join(sorted({e["type"] for e in links})),
-                     "link_keys": "; ".join(sorted({f"{e['type']}:{e['key']}" for e in links}))[:500],
-                     "total_medicare_payment": float(sub["total_payment"].fillna(0).sum())})
-    clusters = pd.DataFrame(rows)
+    df, clusters = graph.cluster_table(df, edges)
     return df, edges, clusters

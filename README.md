@@ -33,7 +33,8 @@ python -m pytest -q tests
 2. **clean/**: header aliases (`config.yaml: columns`), address/name/person normalisation.
 3. **match/**: merge by CCN/NPI/license #, then fuzzy name + normalised address (one row per source per
    provider, so sibling agencies at one suite stay separate); enrich with corporate records and NPPES;
-   build address/owner/official links, churn detection and clusters.
+   build address/owner/official links and churn detection; networkx graph of providers, owners/officials and
+   addresses gives clusters with hub and bridge nodes (`match/graph.py`).
 4. **filters/**: known-case filter. Providers on LEIE/SAM, named in press releases, or with a same-conduct
    state sanction (`sanction_same_conduct=Y`) are listed but **excluded from ranking**. Their owners and
    addresses mark other providers as `linked_known_case`.

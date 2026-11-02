@@ -33,7 +33,7 @@ PHRASE = {
 _META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip",
          "county", "license_date", "cert_date", "operating_since", "close_date", "status", "owners", "administrator", "auth_official",
          "known_case", "known_case_reason", "known_case_note", "score", "score_pct_of_max", "n_flags", "flags_triggered",
-         "est_exposure_usd", "match_method", "cluster_id", "cluster_size", "beneficiaries", "total_payment", "payment_per_bene",
+         "est_exposure_usd", "match_method", "cluster_id", "cluster_size", "cluster_hub", "beneficiaries", "total_payment", "payment_per_bene",
          "peer_median_payment_per_bene"]
 
 
@@ -134,7 +134,7 @@ def _links(r) -> str:
     return " · ".join(out)
 
 
-def write_html(df: pd.DataFrame, cfg: dict, outdir: Path, title: str, runinfo: str) -> None:
+def write_html(df: pd.DataFrame, cfg: dict, outdir: Path, title: str, runinfo: str, clusters=None) -> None:
     top = df[df["rank"].notna()].sort_values("rank").head(cfg["report"]["top_n"])
     excl = df[df["known_case"]]
     rows = []
@@ -148,6 +148,13 @@ def write_html(df: pd.DataFrame, cfg: dict, outdir: Path, title: str, runinfo: s
             f"<td>{r['state']}</td><td>{r['sector']}</td><td>{r['score']:.0f}</td><td>{ex}</td>"
             f"<td><details><summary>{int(r['n_flags'])} flags</summary><ul>{flags}</ul>"
             f"<p>{html.escape(summary_text(r))}</p><p class='lk'>{_links(r)}</p></details></td></tr>")
+    net_rows = ""
+    if clusters is not None and len(clusters):
+        for _, c in clusters.head(10).iterrows():
+            net_rows += (f"<tr><td>{html.escape(c['cluster_id'])}</td><td>{int(c['size'])}</td><td>{html.escape(c['sectors'])}</td>"
+                         f"<td>{html.escape(str(c['hub_node']))} ({int(c['hub_degree'])} links)</td>"
+                         f"<td>${c['total_medicare_payment']:,.0f}</td>"
+                         f"<td><small>{html.escape(str(c['provider_names'])[:240])}</small></td></tr>")
     ex_rows = "".join(f"<li>{html.escape(_s(r['name']))} ({html.escape(r['provider_id'])}): {html.escape(r['known_case_reason'])}</li>"
                       for _, r in excl.iterrows())
     page = f"""<!doctype html><html lang="en"><meta charset="utf-8"><title>{html.escape(title)}</title>
@@ -159,6 +166,8 @@ th{{background:#f3f4f6}}.warn{{background:#fff4e5;border:1px solid #f0b46c;paddi
 <h2>Top {len(top)} leads</h2><table><tr><th>#</th><th>Provider</th><th>State</th><th>Sector</th><th>Score</th><th>Est. exposure</th><th>Flags / verification</th></tr>
 {''.join(rows) or '<tr><td colspan=7>No leads met the minimum score.</td></tr>'}</table>
 <p><small>{html.escape(cfg['scoring']['exposure_note'])}</small></p>
+<h2>Largest networks (cross-sector first)</h2><table><tr><th>Cluster</th><th>Providers</th><th>Sectors</th><th>Hub owner/address</th><th>Medicare payment</th><th>Members</th></tr>
+{net_rows or '<tr><td colspan=6>No networks.</td></tr>'}</table>
 <h2>Excluded from ranking: known cases ({len(excl)})</h2><ul>{ex_rows or '<li>none</li>'}</ul></html>"""
     (outdir / "report.html").write_text(page, encoding="utf-8")
 
@@ -166,4 +175,5 @@ th{{background:#f3f4f6}}.warn{{background:#fff4e5;border:1px solid #f0b46c;paddi
 def write_all(df, clusters, cfg, outdir: Path, title: str, runinfo: str) -> None:
     d = write_csvs(df, clusters, outdir)
     write_evidence(df, cfg, outdir, {})
-    write_html(df, cfg, outdir, title, runinfo)
+    keep = pd.read_csv(outdir / "clusters.csv") if (outdir / "clusters.csv").stat().st_size > 5 else None
+    write_html(df, cfg, outdir, title, runinfo, keep)

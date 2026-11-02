@@ -21,7 +21,7 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
     for c in ("registered_agent", "corp_formation_date", "corp_status"):
         if c not in prov:
             prov[c] = pd.NA
-    for c in ("owner_natl", "owner_mid"):
+    for c in ("owner_natl", "owner_mid", "owner_info"):
         if c not in prov:
             prov[c] = [{} for _ in range(len(prov))]
     if corp is None or corp.empty or "name" not in corp:
@@ -48,6 +48,14 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
                 mi = clean_str(rr.get("officer_middle", "")).upper()[:1]
                 if k and mi:
                     mids[k] = mi
+        info = {}
+        for _, rr in g.iterrows():
+            k = person_key(clean_str(rr.get("officer_name", "")))
+            if k:
+                nc = rr.get("owner_name_count")
+                info[k] = {"name": clean_str(rr.get("officer_name", "")), "role": clean_str(rr.get("officer_title", "")),
+                           "pct": clean_str(rr.get("ownership_pct", "")), "since": clean_str(rr.get("owner_since", "")),
+                           "name_count": int(nc) if pd.notna(nc) else 0}
         natl = {}
         if "owner_national" in g.columns:
             for _, rr in g.iterrows():
@@ -55,7 +63,7 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
                 v = rr.get("owner_national")
                 if k and pd.notna(v):
                     natl[k] = max(natl.get(k, 0), int(v))
-        ents[n] = {"mids": mids, "natl": natl, "owners": _join(*owners), "admins": _join(*admins),
+        ents[n] = {"info": info, "mids": mids, "natl": natl, "owners": _join(*owners), "admins": _join(*admins),
                    "agent": clean_str(g.get("registered_agent", pd.Series([""])).iloc[0]),
                    "formed": g["formation_date"].dropna().min() if "formation_date" in g else pd.NaT,
                    "status": clean_str(g["status"].iloc[0]) if "status" in g else "",
@@ -84,6 +92,8 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
         prov.at[i, "administrator"] = _join(r["administrator"] if pd.notna(r["administrator"]) else "", e["admins"])
         cur = prov.at[i, "owner_natl"] if isinstance(prov.at[i, "owner_natl"], dict) else {}
         prov.at[i, "owner_natl"] = {**cur, **e["natl"]}
+        curi = prov.at[i, "owner_info"] if isinstance(prov.at[i, "owner_info"], dict) else {}
+        prov.at[i, "owner_info"] = {**curi, **e["info"]}
         curm = prov.at[i, "owner_mid"] if isinstance(prov.at[i, "owner_mid"], dict) else {}
         prov.at[i, "owner_mid"] = {**curm, **e["mids"]}
         prov.at[i, "registered_agent"] = e["agent"]

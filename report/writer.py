@@ -47,6 +47,9 @@ def write_csvs(df: pd.DataFrame, clusters: pd.DataFrame, outdir: Path) -> pd.Dat
     cols = [c for c in _META if c in df.columns] + flagcols
     d = df.sort_values(["known_case", "rank", "score"], ascending=[True, True, False], na_position="last")
     d[cols].to_csv(outdir / "red_flags.csv", index=False)
+    recs = [r for lst in df["owner_exclusion_records"] if isinstance(lst, list) for r in lst] if "owner_exclusion_records" in df else []
+    pd.DataFrame(recs).sort_values("match_strength", ascending=False).to_csv(outdir / "identity_review.csv", index=False) if recs \
+        else pd.DataFrame(columns=["provider_id"]).to_csv(outdir / "identity_review.csv", index=False)
     if clusters is not None and len(clusters):
         pid = set(df["provider_id"])
         keep = clusters[clusters["provider_ids"].map(lambda s: any(p in pid for p in s.split("; ")))]

@@ -186,3 +186,13 @@ def test_middle_initial_conflict_rules_out_match():
     assert _loc_ok(locs, "GA", "", False, mid="") == [0]          # middle unknown on our side: cannot rule out
     assert _loc_ok(locs, "TX", "", False, mid="Z") == [1]         # no middle on the list entry: cannot rule out
     assert _loc_ok(locs, "FL", "", False) == []                   # other state
+
+
+def test_owner_exclusion_strength_and_review_file(result):
+    r, _, out = result
+    row = r.loc["Owner Excluded Match LLC"]
+    assert row["owner_exclusion_strength"] == 0.5          # middle initial unknown, name not ambiguous
+    assert row["score"] >= 2.5                              # weight 5 x 0.5
+    rv = pd.read_csv(out / "combined" / "identity_review.csv")
+    assert {"owner", "leie_excl_type", "middle_initial_status", "match_strength"} <= set(rv.columns)
+    assert "Owner Excluded Match LLC" in set(rv["provider"])

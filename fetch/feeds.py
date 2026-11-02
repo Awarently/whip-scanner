@@ -108,8 +108,15 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
     # how many Medicare providers of this type each owner (by PECOS associate id) is tied to NATIONALLY;
     # state-level counts hide corporate parents (e.g. a private-equity fund with 68 agencies, 5 in one state)
     natl = own.groupby("ASSOCIATE ID - OWNER")["ENROLLMENT ID"].nunique()
+    # how many DIFFERENT people (associate ids) share this first+last name nationally: a name-ambiguity measure
+    # computed from the same data (not from any demographic attribute)
+    ind = own[own["TYPE - OWNER"] == "I"].copy()
+    ind["_k"] = (ind["FIRST NAME - OWNER"].fillna("") + " " + ind["LAST NAME - OWNER"].fillna("")).str.upper().str.strip()
+    namecount = ind.groupby("_k")["ASSOCIATE ID - OWNER"].nunique()
     own = own[own["ENROLLMENT ID"].isin(set(enr["ENROLLMENT ID"]))].copy()
     own["natl"] = own["ASSOCIATE ID - OWNER"].map(natl)
+    own["_k"] = (own["FIRST NAME - OWNER"].fillna("") + " " + own["LAST NAME - OWNER"].fillna("")).str.upper().str.strip()
+    own["name_count"] = own["_k"].map(namecount)
     j = own.merge(enr, on="ENROLLMENT ID", how="inner", suffixes=("_own", ""))
     person = (j["FIRST NAME - OWNER"].fillna("") + " " + j["LAST NAME - OWNER"].fillna("")).str.strip()
     out = pd.DataFrame({
@@ -120,7 +127,8 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
         "officer_title": j["ROLE TEXT - OWNER"].fillna("") + " " + j["TITLE - OWNER"].fillna(""),
         "ownership_pct": j["PERCENTAGE OWNERSHIP"], "enrollment_id": j["ENROLLMENT ID"],
         "owner_id": j["ASSOCIATE ID - OWNER"], "owner_national_providers": j["natl"],
-        "officer_middle": j["MIDDLE NAME - OWNER"]})
+        "officer_middle": j["MIDDLE NAME - OWNER"], "owner_name_count": j["name_count"],
+        "owner_since": j["ASSOCIATION DATE - OWNER"]})
     dest.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(dest, index=False)
     log.info(f"PECOS: {len(enr)} enrollments, {len(out)} owner rows for {state}")

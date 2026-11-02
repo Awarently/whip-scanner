@@ -82,7 +82,9 @@ def f_virtual(df, t, ctx):
 
 def f_owner_excl(df, t, ctx):
     m = df["owner_exclusion_match"].astype(bool)
-    return m, df["owner_exclusion_detail"].where(m, "")
+    strength = df["owner_exclusion_strength"].astype(float).where(m, 0.0)   # identity evidence x name ambiguity
+    detail = (df["owner_exclusion_detail"] + "  [match strength " + strength.round(2).astype(str) + " of 1]").where(m, "")
+    return strength, detail
 
 
 def f_linked_known(df, t, ctx):

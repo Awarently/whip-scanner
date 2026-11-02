@@ -200,6 +200,8 @@ columns:
   ownership_pct: [ownership_pct, percentage_ownership]
   owner_id: [owner_id]
   officer_middle: [officer_middle]
+  owner_name_count: [owner_name_count]
+  owner_since: [owner_since]
   owner_national: [owner_national_providers]
 
 # ---------------------------------------------------------------------------

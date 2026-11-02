@@ -19,7 +19,8 @@ class KnownSets:
         self.persons: dict[str, list[str]] = defaultdict(list)    # key -> sources
         self.orgs: dict[str, list[str]] = defaultdict(list)
         self.last_blocks: dict[str, list[str]] = defaultdict(list)
-        self.loc: dict[str, list[tuple]] = defaultdict(list)   # key -> [(state, zip5)] per source record
+        self.loc: dict[str, list[tuple]] = defaultdict(list)   # key -> [(state, zip5, middle initial)] per source record
+        self.rec: dict[str, dict] = {}                          # source id -> details for human review
 
     def add_name(self, raw: str, src: str, state: str = "", zip5: str = "", mid: str = ""):
         k = person_key(raw)
@@ -64,6 +65,10 @@ def build_known_sets(frames: dict, log) -> KnownSets:
                 ks.npis[clean_str(r["npi"])] = src
             if clean_str(r.get("busname", "")):
                 ks.add_name(r["busname"], src, st, zp)
+            ks.rec[src] = {"name": " ".join(x for x in (r.get("firstname", ""), r.get("midname", ""), r.get("lastname", ""), r.get("busname", "")) if x),
+                           "city": r.get("city", ""), "state": st, "specialty": r.get("specialty", ""), "general": r.get("general", ""),
+                           "excl_type": r.get("excltype", ""), "excl_date": r.get("excldate", ""), "reinstated": r.get("reindate", ""),
+                           "dob_year": clean_str(r.get("dob", ""))[:4]}
             if clean_str(r.get("firstname", "")) and clean_str(r.get("lastname", "")):
                 ks.add_name(f"{r['firstname']} {r['lastname']}", src, st, zp, r.get("midname", ""))
     sam = frames.get("sam")
@@ -115,7 +120,8 @@ def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press
     but do not exclude the provider (national franchise/common names produce false matches)."""
     pthr, othr = cfg["match"]["person_threshold"], cfg["match"]["org_threshold"]
     df = df.copy()
-    for c, v in (("known_case", False), ("known_case_reason", ""), ("known_case_note", ""),
+    df["owner_exclusion_records"] = [[] for _ in range(len(df))]
+    for c, v in (("owner_exclusion_strength", 0.0), ("known_case", False), ("known_case_reason", ""), ("known_case_note", ""),
                  ("owner_exclusion_match", False), ("owner_exclusion_detail", ""),
                  ("linked_known_case", False), ("linked_known_case_detail", "")):
         df[c] = v
@@ -144,8 +150,9 @@ def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press
             df.at[i, "known_case_note"] = " | ".join(notes)
 
         # owners / officials vs exclusion lists and press names (state must agree)
-        hits, press_hits = [], []
+        hits, press_hits, recs, strengths = [], [], [], []
         mids = r["owner_mid"] if isinstance(r.get("owner_mid"), dict) else {}
+        infos = r["owner_info"] if isinstance(r.get("owner_info"), dict) else {}
         for key in r["people"]:
             for ks, lst in ((excl, hits), (press, press_hits)):
                 m = ks.match_org(key[4:], othr) if key.startswith("ORG:") else ks.match_person(key, pthr)
@@ -155,7 +162,25 @@ def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press
                 if idx:   # cite the record(s) that actually corroborate, not just the first with that name
                     cited = ", ".join(m[2][j] for j in idx[:3])
                     lst.append(f"{key.replace('ORG:', '')}~{m[0]} ({m[1]:.0f}; {cited}; {len(idx)} same-state record(s))")
+                    if ks is excl:
+                        inf = infos.get(key, {})
+                        mid_ok = bool(mids.get(key)) and any(m[3][j][2] == mids.get(key) for j in idx)
+                        nc = inf.get("name_count", 0)
+                        # strength: identity evidence (middle initial agrees) x name ambiguity (people sharing the name)
+                        base = 1.0 if (mid_ok or key.startswith("ORG:")) else 0.5
+                        amb = 1.0 if nc <= 3 else (0.5 if nc <= 10 else 0.25)
+                        strengths.append(base * amb)
+                        for j in idx[:3]:
+                            recs.append({"provider_id": r["provider_id"], "provider": r["name"], "sector": r["sector"],
+                                         "owner": inf.get("name", key), "owner_role": inf.get("role", ""),
+                                         "ownership_pct": inf.get("pct", ""), "owner_since": inf.get("since", ""),
+                                         "owner_middle": mids.get(key, ""), "people_with_same_name_nationally": nc,
+                                         "middle_initial_status": "agrees" if mid_ok else "unknown (cannot rule out)",
+                                         "match_strength": base * amb, "leie_source": m[2][j],
+                                         **{f"leie_{k}": v for k, v in ks.rec.get(m[2][j], {}).items()}})
         if hits:
+            df.at[i, "owner_exclusion_strength"] = max(strengths) if strengths else 1.0
+            df.at[i, "owner_exclusion_records"] = recs
             df.at[i, "owner_exclusion_match"] = True
             df.at[i, "owner_exclusion_detail"] = "; ".join(hits) + "  -- fuzzy name + same-state match only, verify identity"
         if press_hits:

@@ -119,7 +119,8 @@ def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
         "officer_name": person.where(person != "", j["ORGANIZATION NAME - OWNER"]),
         "officer_title": j["ROLE TEXT - OWNER"].fillna("") + " " + j["TITLE - OWNER"].fillna(""),
         "ownership_pct": j["PERCENTAGE OWNERSHIP"], "enrollment_id": j["ENROLLMENT ID"],
-        "owner_id": j["ASSOCIATE ID - OWNER"], "owner_national_providers": j["natl"]})
+        "owner_id": j["ASSOCIATE ID - OWNER"], "owner_national_providers": j["natl"],
+        "officer_middle": j["MIDDLE NAME - OWNER"]})
     dest.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(dest, index=False)
     log.info(f"PECOS: {len(enr)} enrollments, {len(out)} owner rows for {state}")

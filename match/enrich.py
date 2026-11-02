@@ -21,8 +21,9 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
     for c in ("registered_agent", "corp_formation_date", "corp_status"):
         if c not in prov:
             prov[c] = pd.NA
-    if "owner_natl" not in prov:
-        prov["owner_natl"] = [{} for _ in range(len(prov))]
+    for c in ("owner_natl", "owner_mid"):
+        if c not in prov:
+            prov[c] = [{} for _ in range(len(prov))]
     if corp is None or corp.empty or "name" not in corp:
         return prov
     corp = corp.copy()
@@ -40,6 +41,13 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
             if not who or any(w in title for w in agent_w):
                 continue
             (admins if any(w in title for w in admin_w) else owners).append(who)
+        mids = {}
+        if "officer_middle" in g.columns:
+            for _, rr in g.iterrows():
+                k = person_key(clean_str(rr.get("officer_name", "")))
+                mi = clean_str(rr.get("officer_middle", "")).upper()[:1]
+                if k and mi:
+                    mids[k] = mi
         natl = {}
         if "owner_national" in g.columns:
             for _, rr in g.iterrows():
@@ -47,7 +55,7 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
                 v = rr.get("owner_national")
                 if k and pd.notna(v):
                     natl[k] = max(natl.get(k, 0), int(v))
-        ents[n] = {"natl": natl, "owners": _join(*owners), "admins": _join(*admins),
+        ents[n] = {"mids": mids, "natl": natl, "owners": _join(*owners), "admins": _join(*admins),
                    "agent": clean_str(g.get("registered_agent", pd.Series([""])).iloc[0]),
                    "formed": g["formation_date"].dropna().min() if "formation_date" in g else pd.NaT,
                    "status": clean_str(g["status"].iloc[0]) if "status" in g else "",
@@ -76,6 +84,8 @@ def enrich_corp(prov: pd.DataFrame, corp: pd.DataFrame | None, res, cfg, log) ->
         prov.at[i, "administrator"] = _join(r["administrator"] if pd.notna(r["administrator"]) else "", e["admins"])
         cur = prov.at[i, "owner_natl"] if isinstance(prov.at[i, "owner_natl"], dict) else {}
         prov.at[i, "owner_natl"] = {**cur, **e["natl"]}
+        curm = prov.at[i, "owner_mid"] if isinstance(prov.at[i, "owner_mid"], dict) else {}
+        prov.at[i, "owner_mid"] = {**curm, **e["mids"]}
         prov.at[i, "registered_agent"] = e["agent"]
         prov.at[i, "corp_formation_date"] = e["formed"]
         prov.at[i, "corp_status"] = e["status"]

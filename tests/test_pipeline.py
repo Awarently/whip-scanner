@@ -176,3 +176,13 @@ def test_national_chain_owner_is_chain_even_with_few_local_providers():
     df["owner_natl"] = [{key: 68}, {key: 68}]
     edges, chain = build_edges(df, cfg)
     assert not edges and chain and chain[0]["size"] == 68                   # 68 providers nationally: chain
+
+
+def test_middle_initial_conflict_rules_out_match():
+    from filters.known_case import _loc_ok
+    locs = [("GA", "30301", "B"), ("TX", "75001", "")]
+    assert _loc_ok(locs, "GA", "", False, mid="L") == []          # Amy L vs Amy B: different people
+    assert _loc_ok(locs, "GA", "", False, mid="B") == [0]
+    assert _loc_ok(locs, "GA", "", False, mid="") == [0]          # middle unknown on our side: cannot rule out
+    assert _loc_ok(locs, "TX", "", False, mid="Z") == [1]         # no middle on the list entry: cannot rule out
+    assert _loc_ok(locs, "FL", "", False) == []                   # other state

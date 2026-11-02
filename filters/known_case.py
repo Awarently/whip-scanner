@@ -21,12 +21,12 @@ class KnownSets:
         self.last_blocks: dict[str, list[str]] = defaultdict(list)
         self.loc: dict[str, list[tuple]] = defaultdict(list)   # key -> [(state, zip5)] per source record
 
-    def add_name(self, raw: str, src: str, state: str = "", zip5: str = ""):
+    def add_name(self, raw: str, src: str, state: str = "", zip5: str = "", mid: str = ""):
         k = person_key(raw)
         if not k:
             return
         z = "".join(c for c in clean_str(zip5) if c.isdigit())[:5]
-        loc = (clean_str(state).upper(), z)
+        loc = (clean_str(state).upper(), z, clean_str(mid).upper()[:1])      # (state, zip5, middle initial)
         if k.startswith("ORG:"):
             self.orgs[k[4:]].append(src)
             self.loc["O:" + k[4:]].append(loc)
@@ -65,7 +65,7 @@ def build_known_sets(frames: dict, log) -> KnownSets:
             if clean_str(r.get("busname", "")):
                 ks.add_name(r["busname"], src, st, zp)
             if clean_str(r.get("firstname", "")) and clean_str(r.get("lastname", "")):
-                ks.add_name(f"{r['firstname']} {r['lastname']}", src, st, zp)
+                ks.add_name(f"{r['firstname']} {r['lastname']}", src, st, zp, r.get("midname", ""))
     sam = frames.get("sam")
     if sam is not None:
         for _, r in sam.iterrows():
@@ -77,7 +77,7 @@ def build_known_sets(frames: dict, log) -> KnownSets:
                 ks.npis[clean_str(r["npi"])] = src
             fn, ln = clean_str(r.get("firstname", r.get("first", ""))), clean_str(r.get("lastname", r.get("last", "")))
             if fn and ln:
-                ks.add_name(f"{fn} {ln}", src, r.get("state", ""), r.get("zip", ""))
+                ks.add_name(f"{fn} {ln}", src, r.get("state", ""), r.get("zip", ""), r.get("middle", r.get("midname", "")))
     log.info(f"known-case sets: {len(ks.npis)} NPIs, {len(ks.persons)} persons, {len(ks.orgs)} orgs (LEIE/SAM)")
     return ks
 
@@ -95,12 +95,18 @@ def split_press(press: pd.DataFrame | None, ks: KnownSets, log):
     return pk
 
 
-def _loc_ok(locs, state, zip5, need_zip: bool) -> bool:
-    """True if any source record shares the provider's state (and ZIP when need_zip)."""
-    for st, z in locs:
-        if st and st == state and (not need_zip or (z and z == zip5)):
-            return True
-    return False
+def _loc_ok(locs, state, zip5, need_zip: bool, mid: str = "") -> list[int]:
+    """Indices of source records that corroborate the match: same state (and ZIP when need_zip), and no
+    conflicting middle initial (both known and different => a different person)."""
+    mid = clean_str(mid).upper()[:1]
+    out = []
+    for i, (st, z, m) in enumerate(locs):
+        if not (st and st == state and (not need_zip or (z and z == zip5))):
+            continue
+        if mid and m and mid != m:
+            continue
+        out.append(i)
+    return out
 
 
 def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press: KnownSets, cfg: dict):
@@ -139,11 +145,16 @@ def apply_known_case(df: pd.DataFrame, edges: list[dict], excl: KnownSets, press
 
         # owners / officials vs exclusion lists and press names (state must agree)
         hits, press_hits = [], []
+        mids = r["owner_mid"] if isinstance(r.get("owner_mid"), dict) else {}
         for key in r["people"]:
             for ks, lst in ((excl, hits), (press, press_hits)):
                 m = ks.match_org(key[4:], othr) if key.startswith("ORG:") else ks.match_person(key, pthr)
-                if m and _loc_ok(m[3], r["state"], "", need_zip=False):
-                    lst.append(f"{key.replace('ORG:', '')}~{m[0]} ({m[1]:.0f}; {m[2][0]})")
+                if not m:
+                    continue
+                idx = _loc_ok(m[3], r["state"], "", need_zip=False, mid=mids.get(key, ""))
+                if idx:   # cite the record(s) that actually corroborate, not just the first with that name
+                    cited = ", ".join(m[2][j] for j in idx[:3])
+                    lst.append(f"{key.replace('ORG:', '')}~{m[0]} ({m[1]:.0f}; {cited}; {len(idx)} same-state record(s))")
         if hits:
             df.at[i, "owner_exclusion_match"] = True
             df.at[i, "owner_exclusion_detail"] = "; ".join(hits) + "  -- fuzzy name + same-state match only, verify identity"

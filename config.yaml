@@ -199,6 +199,7 @@ columns:
   neoplasm_pct: [prmry_dx_neobld_pct]
   ownership_pct: [ownership_pct, percentage_ownership]
   owner_id: [owner_id]
+  officer_middle: [officer_middle]
   owner_national: [owner_national_providers]
 
 # ---------------------------------------------------------------------------

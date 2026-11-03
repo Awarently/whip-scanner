@@ -117,6 +117,8 @@ def main(argv=None):
     ap.add_argument("--states", nargs="+")
     ap.add_argument("--sectors", nargs="+")
     ap.add_argument("--offline", action="store_true", help="skip automated downloads; use manual/cache only")
+    ap.add_argument("--national-exclusion", action="store_true",
+                    help="nationwide check of LEIE-excluded people/entities in PECOS home health + hospice records")
     ap.add_argument("--demo", action="store_true", help="generate synthetic data in ./data_demo and run on it")
     a = ap.parse_args(argv)
     cfg = load_config(a.config)
@@ -128,6 +130,14 @@ def main(argv=None):
                              "out": root / "output"})
         cfg["fetch"]["nppes_enabled"] = False
         a.offline = True
+    if a.national_exclusion:
+        from exclusion.national import run_national
+        from fetch import feeds
+        log = RunLog()
+        out = run_national(cfg, log, resolve_source, feeds, a.offline)
+        if out:
+            log.write(out / "run_log.txt")
+        return 0 if out else 1
     states = a.states or cfg["run"]["states"]
     sectors = a.sectors or cfg["run"]["sectors"]
     out = run(cfg, states, sectors, a.offline)

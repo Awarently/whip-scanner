@@ -101,7 +101,8 @@ def cms_api(spec, cfg, log, state: str, dest: Path) -> Path:
 
 def pecos(spec, cfg, log, state: str, dest: Path) -> Path:
     """PECOS enrollments (state-filtered) joined to All-Owners -> one row per owner, keyed by CCN/NPI."""
-    enr = pd.DataFrame(_api_rows(spec["enroll_id"], cfg, log, spec.get("state_param", "ENROLLMENT STATE"), state))
+    st = None if state in (None, "ALL") else state            # "ALL" = national, no state filter
+    enr = pd.DataFrame(_api_rows(spec["enroll_id"], cfg, log, spec.get("state_param", "ENROLLMENT STATE"), st))
     if enr.empty:
         raise ValueError(f"no PECOS enrollments for {state}")
     own = pd.DataFrame(_api_rows(spec["owners_id"], cfg, log))

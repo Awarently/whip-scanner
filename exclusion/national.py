@@ -112,7 +112,7 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
             rc = role_class(o["officer_title"])
             after = bool(pd.notna(since) and pd.notna(r["excl_date"]) and since > r["excl_date"])
             cafter = bool(pd.notna(cdate) and pd.notna(r["excl_date"]) and cdate > r["excl_date"])
-            nc = int(o["owner_name_count"]) if clean_str(o.get("owner_name_count", "")) else 0
+            nc = int(float(o["owner_name_count"])) if clean_str(o.get("owner_name_count", "")) else 0
             amb = 1.0 if nc <= 3 else 0.5 if nc <= 10 else 0.25
             pct = pd.to_numeric(o.get("ownership_pct"), errors="coerce")
             score = (TIER_BASE[tier] * amb * ROLE_WEIGHT[rc] * (1.0 if n_same_state <= 1 else 0.5)
@@ -127,6 +127,8 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
                 "leie_state": r["state"], "leie_city": r["city"], "leie_general": r["general"], "leie_specialty": r["specialty"],
                 "leie_excl_type": r["excltype"], "leie_excl_date": r["excl_date"], "leie_dob_year": clean_str(r["dob"])[:4],
                 "owner_after_exclusion": after, "cert_after_exclusion": cafter,
+                "months_exclusion_to_cert": (round((cdate - r["excl_date"]).days / 30.4, 1) if pd.notna(cdate) and pd.notna(r["excl_date"]) else None),
+                "months_exclusion_to_owner_since": (round((since - r["excl_date"]).days / 30.4, 1) if pd.notna(since) and pd.notna(r["excl_date"]) else None),
                 "people_same_name_in_pecos": nc, "leie_same_name_same_state": n_same_state})
     out = pd.DataFrame(rows)
     if len(out):

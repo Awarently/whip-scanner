@@ -39,3 +39,13 @@ def score_sector(df: pd.DataFrame, sector: str, cfg: dict) -> pd.DataFrame:
     df["rank"] = pd.NA
     df.loc[order.index, "rank"] = range(1, len(order) + 1)
     return df
+
+
+def rerank(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Recompute rank after known-case changes (known cases are excluded from the target ranking)."""
+    df = df.copy()
+    elig = (~df["known_case"]) & (df["score"] >= cfg["scoring"]["min_score_for_lead"])
+    order = df[elig].sort_values(["score", "est_exposure_usd"], ascending=False, na_position="last")
+    df["rank"] = pd.NA
+    df.loc[order.index, "rank"] = range(1, len(order) + 1)
+    return df

@@ -281,3 +281,10 @@ scoring:
 
 report:
   top_n: 50
+
+press:
+  delay_seconds: 1.0
+  check_top_n: 400             # leads per state/sector checked for owner names in press releases
+  doj_title_keywords: ["hospice", "home health", "health care fraud", "healthcare fraud", "medicare", "medicaid",
+                       "kickback", "false claims", "durable medical", "home care", "nursing", "genetic test",
+                       "laborator", "telehealth", "telemedicine", "pharmacy", "ambulance", "medical transport"]

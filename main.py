@@ -16,7 +16,8 @@ from match.entity import merge_sector
 from match.enrich import enrich_corp, enrich_nppes
 from match.network import annotate
 from filters.known_case import build_known_sets, split_press, apply_known_case
-from score.engine import score_sector
+from score.engine import score_sector, rerank
+from filters.press import load_latest, apply_press
 from report import write_all
 
 
@@ -96,6 +97,17 @@ def run(cfg, states, sectors, offline=False, log=None):
     for (st, sector), g in prov.groupby(["state", "sector"]):
         scored.append(score_sector(g, sector, cfg))
     allp = pd.concat(scored).sort_index()
+    pidx = load_latest(cfg)
+    if pidx is not None:
+        parts = []
+        for (st, sector), g in allp.groupby(["state", "sector"]):
+            parts.append(rerank(apply_press(g, pidx, cfg), cfg))
+        allp = pd.concat(parts).sort_index()
+        log.info(f"press check: {int((allp['press_provider_refs'] != '').sum())} providers and "
+                 f"{int((allp['press_owner_refs'] != '').sum())} owner groups named in DOJ releases; "
+                 f"{int(allp['known_case'].sum())} known-case exclusions")
+    else:
+        log.warn("no DOJ press corpus found (run: python main.py --refresh-press); originality not checked")
     info = f"Run {cfg['_as_of']} · {len(allp)} providers · {int((allp['rank'].notna()).sum())} ranked leads · {int(allp['known_case'].sum())} known-case exclusions"
     for (st, sector), g in allp.groupby(["state", "sector"]):
         g = g.copy()
@@ -119,6 +131,8 @@ def main(argv=None):
     ap.add_argument("--offline", action="store_true", help="skip automated downloads; use manual/cache only")
     ap.add_argument("--national-exclusion", action="store_true",
                     help="nationwide check of LEIE-excluded people/entities in PECOS home health + hospice records")
+    ap.add_argument("--refresh-press", action="store_true",
+                    help="download the DOJ press-release corpus (title keywords from config press.*) to data/raw/press_doj/")
     ap.add_argument("--demo", action="store_true", help="generate synthetic data in ./data_demo and run on it")
     a = ap.parse_args(argv)
     cfg = load_config(a.config)
@@ -130,6 +144,15 @@ def main(argv=None):
                              "out": root / "output"})
         cfg["fetch"]["nppes_enabled"] = False
         a.offline = True
+    if a.refresh_press:
+        from fetch.doj import fetch_doj_press
+        log = RunLog()
+        dest = cfg["paths"]["raw"] / "press_doj" / f"press_doj_{cfg['_as_of']:%Y%m%d}.jsonl"
+        if dest.exists():
+            log.info(f"press corpus already downloaded today: {dest}")
+        else:
+            fetch_doj_press(cfg, log, dest)
+        return 0
     if a.national_exclusion:
         from exclusion.national import run_national
         from fetch import feeds

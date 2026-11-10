@@ -32,7 +32,7 @@ PHRASE = {
 }
 _META = ["provider_id", "rank", "state", "sector", "name", "dba", "license_no", "facility_type", "npi", "ccn", "address", "city", "zip",
          "county", "license_date", "cert_date", "operating_since", "close_date", "status", "owners", "administrator", "auth_official", "board_members",
-         "known_case", "known_case_reason", "known_case_note", "score", "score_pct_of_max", "n_flags", "flags_triggered",
+         "known_case", "known_case_reason", "known_case_note", "press_provider_refs", "press_owner_refs", "press_note", "score", "score_pct_of_max", "n_flags", "flags_triggered",
          "est_exposure_usd", "match_method", "cluster_id", "cluster_size", "cluster_hub", "beneficiaries", "total_payment", "payment_per_bene",
          "peer_median_payment_per_bene"]
 
@@ -92,6 +92,10 @@ def write_evidence(df: pd.DataFrame, cfg: dict, outdir: Path, labels: dict) -> i
                       "(absence of a match is not proof the provider is unknown to enforcement; check manually)."]
             if r["linked_known_case"]:
                 lines.append(f"Linked signal: {r['linked_known_case_detail']}")
+        if _s(r.get("press_provider_refs")) or _s(r.get("press_owner_refs")):
+            lines += ["", "## Prior public disclosure (DOJ press releases)",
+                      f"- Provider name: {_s(r.get('press_provider_refs')) or 'no hit'}",
+                      f"- Owners/officers: {_s(r.get('press_owner_refs')) or 'no hit'}"]
         lines += ["", f"## Triggered flags (score {r['score']:.0f}, {r['score_pct_of_max']}% of max)"]
         fl = [f for f in FLAGS[r["sector"]] if r[f"flag_{f.name}"]]
         if not fl:

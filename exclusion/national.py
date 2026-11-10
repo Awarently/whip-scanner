@@ -136,6 +136,28 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
     return out
 
 
+def annotate_press(df: pd.DataFrame, idx) -> pd.DataFrame:
+    """Mark candidates already named in DOJ press releases (so they are not original information)."""
+    from filters.press import fmt
+    df = df.copy()
+    owner_refs, prov_refs, public = [], [], []
+    cache: dict[tuple, list] = {}
+    for _, r in df.iterrows():
+        k = (r["owner"], r["provider_state"], r["city"])
+        if k not in cache:
+            cache[k] = [h for h in idx.find_person(r["owner"], r["provider_state"], r["city"]) if h["corroborated"]]
+        oh = cache[k]
+        k2 = (r["provider"], r["provider_state"], r["city"])
+        if k2 not in cache:
+            cache[k2] = idx.find_org(r["provider"], r["provider_state"], clean_str(r["city"]))
+        ph = cache[k2]
+        owner_refs.append(fmt(oh, 2))
+        prov_refs.append(fmt(ph, 2))
+        public.append(bool(oh) or any(h["city_match"] for h in ph))
+    df["press_owner_refs"], df["press_provider_refs"], df["already_public"] = owner_refs, prov_refs, public
+    return df
+
+
 def run_national(cfg: dict, log, resolve_source, feeds, offline: bool = False) -> Path | None:
     """Download national PECOS owners (HH + hospice), CMS certification dates and LEIE; write the review file."""
     from clean.build import load_source
@@ -168,6 +190,13 @@ def run_national(cfg: dict, log, resolve_source, feeds, offline: bool = False) -
     cert = pd.concat(cert_all, ignore_index=True)
     log.info(f"national: {len(owners)} owner/officer rows across {owners['ccn'].nunique()} providers; LEIE rows {len(leie)}")
     res_df = match_exclusions(owners, leie, cert)
+    from filters.press import load_latest
+    pidx = load_latest(cfg)
+    if pidx is not None and len(res_df):
+        res_df = annotate_press(res_df, pidx)
+        log.info(f"press check: {int(res_df['already_public'].sum())} of {len(res_df)} candidate rows already named in DOJ releases")
+    else:
+        log.warn("no DOJ press corpus; originality not checked (python main.py --refresh-press)")
     res_df.to_csv(out_dir / "national_identity_review.csv", index=False)
     log.info(f"national exclusion check: {len(res_df)} candidate rows -> {out_dir}")
     return out_dir

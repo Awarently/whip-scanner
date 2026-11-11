@@ -24,7 +24,7 @@ def test_person_and_org_search():
 
 def test_apply_press_marks_known_case_and_linked_owner():
     idx = PressIndex(REL)
-    df = pd.DataFrame({"name": ["SUNNY DAY HOSPICE", "Quiet Agency"], "state": "CA", "city": ["Van Nuys", "Fresno"],
+    df = pd.DataFrame({"name": ["SUNNY DAY HOSPICE", "Quiet Agency"], "state": "CA", "city": ["Van Nuys", "Glendale"],
                        "score": [5.0, 4.0], "n_flags": [3, 3], "known_case": False, "known_case_reason": "",
                        "linked_known_case": False, "linked_known_case_detail": "",
                        "owner_info": [{}, {"JANE ROE": {"name": "Jane Roe", "role": "5% OR GREATER DIRECT OWNERSHIP INTEREST"}}]})
@@ -39,3 +39,5 @@ def test_national_annotation():
     df = pd.DataFrame({"owner": ["JANE ROE", "PAT SMITH"], "provider": ["X", "Y"], "provider_state": ["CA", "TX"], "city": ["Glendale", "Austin"]})
     out = annotate_press(df, idx)
     assert list(out["already_public"]) == [True, False]
+    state_only = annotate_press(pd.DataFrame({"owner": ["JANE ROE"], "provider": ["X"], "provider_state": ["CA"], "city": ["Fresno"]}), idx)
+    assert not state_only.loc[0, "already_public"] and state_only.loc[0, "press_possible_state_only"]   # same state, other city: only "possible"

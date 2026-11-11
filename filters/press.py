@@ -142,7 +142,7 @@ def apply_press(df, idx: "PressIndex", cfg: dict):
             for k, inf in infos.items():
                 if k.startswith("ORG:") or inf.get("role", "").upper().startswith("CORPORATE DIRECTOR BOARD"):
                     continue
-                oh = [h for h in idx.find_person(inf.get("name", ""), r["state"], clean_str(r.get("city", ""))) if h["corroborated"]]
+                oh = [h for h in idx.find_person(inf.get("name", ""), r["state"], clean_str(r.get("city", ""))) if h["city_match"]]
                 if oh:
                     refs.append(f"{inf.get('name')}: {fmt(oh, 1)}")
             if refs:

@@ -31,6 +31,7 @@ def test_tiers_and_exclusions():
     assert r.loc["3", "tier"] == "B" and not r.loc["3", "owner_after_exclusion"]
     assert r.loc["4", "tier"] == "C"
     assert r["priority_score"].idxmax() == "1"
+    assert "same_city" in r.columns
     assert abs(r.loc["1", "months_exclusion_to_cert"] - 20.0) < 0.6      # cert 2021-09 vs exclusion 2020-01
 
 

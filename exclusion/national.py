@@ -24,6 +24,10 @@ from match.enrich import is_board_role
 TIER_BASE = {"A": 3.0, "B": 2.0, "C": 1.0}
 
 
+def _cityn(x) -> str:
+    return " ".join("".join(c for c in clean_str(x).upper() if c.isalpha() or c == " ").split())
+
+
 def role_class(title: str) -> str:
     t = clean_str(title).upper()
     if is_board_role(t):
@@ -115,8 +119,12 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
             nc = int(float(o["owner_name_count"])) if clean_str(o.get("owner_name_count", "")) else 0
             amb = 1.0 if nc <= 3 else 0.5 if nc <= 10 else 0.25
             pct = pd.to_numeric(o.get("ownership_pct"), errors="coerce")
+            same_city = bool(clean_str(o.get("city", "")) and _cityn(o.get("city", "")) == _cityn(r["city"]))
+            spec = clean_str(r["specialty"]).upper()
+            relevant = any(w in spec for w in ("HOME HEALTH", "HOSPICE", "OWNER", "NURS", "HEALTH CARE AIDE", "PERSONAL CARE"))
             score = (TIER_BASE[tier] * amb * ROLE_WEIGHT[rc] * (1.0 if n_same_state <= 1 else 0.5)
-                     + (1.0 if after else 0) + (1.0 if cafter else 0))
+                     + (1.0 if after else 0) + (1.0 if cafter else 0)
+                     + (1.0 if same_city else 0) + (0.5 if relevant else 0))
             rows.append({
                 "tier": tier, "priority_score": round(score, 2), "sector": o["sector"], "provider": o["name"],
                 "ccn": o["ccn"], "provider_npi": npi, "provider_state": state, "city": o.get("city", ""),
@@ -126,6 +134,7 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
                 "provider_cert_date": cdate, "leie_name": " ".join(x for x in (r["firstname"], r["midname"], r["lastname"], r["busname"]) if x),
                 "leie_state": r["state"], "leie_city": r["city"], "leie_general": r["general"], "leie_specialty": r["specialty"],
                 "leie_excl_type": r["excltype"], "leie_excl_date": r["excl_date"], "leie_dob_year": clean_str(r["dob"])[:4],
+                "same_city": same_city, "specialty_relevant": relevant,
                 "owner_after_exclusion": after, "cert_after_exclusion": cafter,
                 "months_exclusion_to_cert": (round((cdate - r["excl_date"]).days / 30.4, 1) if pd.notna(cdate) and pd.notna(r["excl_date"]) else None),
                 "months_exclusion_to_owner_since": (round((since - r["excl_date"]).days / 30.4, 1) if pd.notna(since) and pd.notna(r["excl_date"]) else None),
@@ -137,24 +146,29 @@ def match_exclusions(owners: pd.DataFrame, leie: pd.DataFrame, cert: pd.DataFram
 
 
 def annotate_press(df: pd.DataFrame, idx) -> pd.DataFrame:
-    """Mark candidates already named in DOJ press releases (so they are not original information)."""
+    """Mark candidates already named in DOJ press releases (so they are not original information).
+    already_public needs the release to mention the provider's CITY; state-only hits go to press_possible."""
     from filters.press import fmt
     df = df.copy()
-    owner_refs, prov_refs, public = [], [], []
+    owner_refs, prov_refs, possible, public = [], [], [], []
     cache: dict[tuple, list] = {}
     for _, r in df.iterrows():
-        k = (r["owner"], r["provider_state"], r["city"])
+        k = ("p", r["owner"], r["provider_state"], r["city"])
         if k not in cache:
-            cache[k] = [h for h in idx.find_person(r["owner"], r["provider_state"], r["city"]) if h["corroborated"]]
+            cache[k] = idx.find_person(r["owner"], r["provider_state"], r["city"])
         oh = cache[k]
-        k2 = (r["provider"], r["provider_state"], r["city"])
+        k2 = ("o", r["provider"], r["provider_state"], r["city"])
         if k2 not in cache:
             cache[k2] = idx.find_org(r["provider"], r["provider_state"], clean_str(r["city"]))
         ph = cache[k2]
-        owner_refs.append(fmt(oh, 2))
+        oh_city = [h for h in oh if h["city_match"]]
+        oh_state = [h for h in oh if h["state_match"] and not h["city_match"]]
+        owner_refs.append(fmt(oh_city, 2))
+        possible.append(fmt(oh_state, 1))
         prov_refs.append(fmt(ph, 2))
-        public.append(bool(oh) or any(h["city_match"] for h in ph))
-    df["press_owner_refs"], df["press_provider_refs"], df["already_public"] = owner_refs, prov_refs, public
+        public.append(bool(oh_city) or any(h["city_match"] for h in ph))
+    df["press_owner_refs"], df["press_possible_state_only"] = owner_refs, possible
+    df["press_provider_refs"], df["already_public"] = prov_refs, public
     return df
 
 
